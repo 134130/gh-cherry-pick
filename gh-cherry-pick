@@ -1,18 +1,27 @@
 #!/usr/bin/env bash
-#
-# This script is used to cherry-pick a merged PR to specified branch.
-# Usage:
-#   gh cherry-pick --pr <pr_number> --to <branch_name> [--rebase]
 
 set -o errexit
 set -o nounset
 set -o pipefail
 
+source gh_utils.sh
+
 err() {
   echo "[$(date +'%Y-%m-%dT%H:%M:%S%z')]: $*" >&2
 }
 
-gh_repo_name_with_owner=$(gh repo view --json nameWithOwner)
+usage() {
+  cat <<EOF
+Cherry-pick a merged PR to specified branch.
+
+Usage: gh cherry-pick --pr <pr_number> --to <target_branch> [--rebase]
+
+  --pr  	  The PR number to cherry-pick. (required)
+  --to      The branch to cherry-pick the PR on top of. (required)
+  --rebase  Rebase the commits related of PR.
+            (default: Merged commit will be cherry-picked)
+EOF
+}
 
 parse_params() {
   rebase=0
@@ -20,7 +29,7 @@ parse_params() {
   while :; do
     case "${1-}" in
 		-h | --help)
-			echo "Usage: gh cherry-pick --pr <pr_number> --to <branch_name> [--rebase]"
+		  usage
 			exit
 			;;
 		--pr)
@@ -28,7 +37,7 @@ parse_params() {
 		  shift
 		  ;;
 		--to)
-		  branch_name="${2-}"
+		  target_branch="${2-}"
 		  shift
 		  ;;
  		--rebase) rebase=1 ;;
@@ -46,39 +55,50 @@ parse_params() {
 		exit 1
 	fi
 
-	if [[ -z "${branch_name-}" ]]; then
+	if [[ -z "${target_branch-}" ]]; then
 		err "Missing required parameter: --to"
 		exit 1
 	fi
 }
 
+cherry_pick() {
+  local pr_number=$1
+  local target_branch=$2
+  local rebase=$3
+
+  local cherry_pick_branch_name
+  cherry_pick_branch_name=$(echo "cherry-pick-pr-${pr_number}-to-${target_branch}-$(date +%s)" | sed 's/\//-/g')
+  declare -r cherry_pick_branch_name
+
+  git fetch origin "${target_branch}"
+  git checkout --recurse-submodules -b "${cherry_pick_branch_name}" "origin/${target_branch}"
+  git reset --hard origin/"${target_branch}"
+
+  if [[ $rebase == 1 ]]; then
+    gh pr diff "${pr_number}" --patch > "/tmp/${pr_number}.patch"
+    git am -3 "/tmp/${pr_number}.patch"
+    rm -f "/tmp/${pr_number}.patch"
+  else
+    local merge_commit_sha
+    merge_commit_sha=$(gh pr view "${pr_number}" --json mergeCommit --jq .mergeCommit.oid)
+    if [[ -z "${merge_commit_sha}" ]]; then
+      err "Failed to get merge commit sha. Please check if the PR is merged."
+      exit 1
+    fi
+    git cherry-pick --keep-redundant-commits "${merge_commit_sha}"
+  fi
+}
+
 parse_params "$@"
 
-if [[ -n $(git status -s) ]]; then
-  err "Working directory is not clean"
+if gh_utils::is_dirty; then
+  err "You have uncommitted changes. Please commit or stash them before cherry-picking."
   exit 1
 fi
 
-new_branch_name=$(echo "cherry-pick-pr-${pr_number}-to-${branch_name}-$(date +%s)" | sed 's/\//-/g')
-
-before_branch_name=$(git branch --show-current)
-git stash push -m "cherry-pick-pr-${pr_number}" --include-untracked
-
-git fetch origin "${branch_name}"
-git checkout --recurse-submodules -b "${new_branch_name}" "origin/${branch_name}"
-git reset --hard origin/"${branch_name}"
-
-if [[ $rebase == 1  ]]; then
-  gh pr diff "${pr_number}" --patch > "/tmp/${pr_number}.patch"
-
-  git am -3 "/tmp/${pr_number}.patch"
-
-  rm -f "/tmp/${pr_number}.patch"
-else
-  merge_commit_sha=$(gh pr view "${pr_number}" --json mergeCommit --jq .mergeCommit.oid)
-  if [[ -z "${merge_commit_sha}" ]]; then
-    err "Failed to get merge commit sha. Please check if the PR is merged."
-    exit 1
-  fi
-  git cherry-pick --keep-redundant-commits "${merge_commit_sha}"
+if gh_utils::is_in_rebase_or_am; then
+  err "You are in the middle of a rebase or am. Please finish it before cherry-picking."
+  exit 1
 fi
+
+cherry_pick "${pr_number}" "${target_branch}" "${rebase}"

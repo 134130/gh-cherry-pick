@@ -1,3 +1,7 @@
+## Description
+- A GitHub CLI extension to cherry-pick a PR's merged commit based on target branch.
+- It will be useful when you are using to cherry-pick a PR, which is merged to the main branch, to the release branch.
+
 ## Installation
 ```shell
 gh extension install 134130/gh-cherry-pick
