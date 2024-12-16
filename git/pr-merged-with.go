@@ -15,12 +15,13 @@ const (
 )
 
 func PRMergedWith(ctx context.Context, prNumber int) (MergeStrategy, error) {
-	mergeCommitSHA, err := (&GH{}).RunWithContext(ctx, "pr", "view", strconv.Itoa(prNumber), "--json", "mergeCommit", "--jq", ".mergeCommit.oid")
+	stdout, stderr, err := ExecContext(ctx, "gh", "pr", "view", strconv.Itoa(prNumber), "--json", "mergeCommit", "--jq", ".mergeCommit.oid")
 	if err != nil {
-		return "", fmt.Errorf("failed to get merge commit SHA for PR #%d: %w", prNumber, err)
+		return "", fmt.Errorf("failed to get merge commit SHA for PR #%d: %w: %s", prNumber, err, stderr.String())
 	}
 
-	if mergeCommitSHA == "" {
+	mergeCommitSHA := strings.TrimSpace(stdout.String())
+	if len(mergeCommitSHA) == 0 {
 		return "", fmt.Errorf("failed to get merge commit SHA for PR #%d: PR not merged", prNumber)
 	}
 
@@ -28,24 +29,26 @@ func PRMergedWith(ctx context.Context, prNumber int) (MergeStrategy, error) {
 }
 
 func inspectMergeStrategy(ctx context.Context, prNumber int, mergeCommitSHA string) (MergeStrategy, error) {
-	nameWithOwner, err := (&GH{}).GetNameWithOwner(ctx)
+	nameWithOwner, err := GetNameWithOwner(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to get repository name with owner: %w", err)
 	}
 
-	prevCommitSHA, err := (&GH{}).RunWithContext(ctx, "api", fmt.Sprintf("repos/%s/commits/%s~1", nameWithOwner, mergeCommitSHA), "--jq", ".sha")
+	stdout, stderr, err := ExecContext(ctx, "gh", "api", fmt.Sprintf("repos/%s/commits/%s~1", nameWithOwner, mergeCommitSHA), "--jq", ".sha")
 	if err != nil {
-		return "", fmt.Errorf("failed to get previous commit SHA for merge commit %s: %w", mergeCommitSHA, err)
+		return "", fmt.Errorf("failed to get previous commit SHA for merge commit %s: %w: %s", mergeCommitSHA, err, stderr.String())
 	}
 
-	prevCommitRelatedPRNumbers, err := (&GH{}).RunWithContext(ctx, "api",
+	prevCommitSHA := strings.TrimSpace(stdout.String())
+	stdout, stderr, err = ExecContext(ctx, "gh", "api",
 		"-H", "Accept: application/vnd.github+json",
 		"-H", "X-GitHub-Api-Version: 2022-11-28",
 		fmt.Sprintf("repos/%s/commits/%s/pulls", nameWithOwner, prevCommitSHA), "--jq", ".[].number")
 	if err != nil {
-		return "", fmt.Errorf("failed to get related PR numbers for commit %s: %w", prevCommitSHA, err)
+		return "", fmt.Errorf("failed to get related PR numbers for commit %s: %w: %s", prevCommitSHA, err, stderr.String())
 	}
 
+	prevCommitRelatedPRNumbers := strings.TrimSpace(stdout.String())
 	if len(prevCommitRelatedPRNumbers) == 0 {
 		return "", fmt.Errorf("failed to get related PR numbers for commit %s: no related PRs", prevCommitSHA)
 	}
