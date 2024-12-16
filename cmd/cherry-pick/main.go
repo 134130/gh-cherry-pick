@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/134130/gh-cherry-pick/git"
+	"github.com/134130/gh-cherry-pick/internal/tui"
 )
 
 var (
@@ -29,6 +30,7 @@ func main() {
 
 	ctx := context.Background()
 	if err := cherryPick.RunWithContext(ctx); err != nil {
-		panic(err)
+		tui.PrintError(err.Error())
+		os.Exit(1)
 	}
 }

@@ -10,6 +10,7 @@ import (
 )
 
 var (
+	cyan  = color.New(color.FgCyan).SprintFunc()
 	green = color.New(color.FgGreen).SprintFunc()
 	red   = color.New(color.FgRed).SprintFunc()
 )
@@ -23,7 +24,7 @@ func PrintError(message string) {
 }
 
 func WithSpinner(ctx context.Context, message string, f func(ctx context.Context) (string, error)) {
-	sp := spinner.New(spinner.CharSets[14], 40*time.Millisecond)
+	sp := spinner.New(spinner.CharSets[14], 40*time.Millisecond, spinner.WithColor("cyan"))
 	sp.Suffix = " " + message
 	sp.Start()
 

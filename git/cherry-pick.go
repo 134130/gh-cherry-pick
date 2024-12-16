@@ -3,7 +3,6 @@ package git
 import (
 	"context"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -21,23 +20,25 @@ type CherryPick struct {
 
 func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
 	if dirty, err := IsDirty(ctx); err != nil {
-		if _, err = fmt.Fprintf(os.Stderr, "error checking if the repository is dirty: %v", err); err != nil {
-			return err
-		}
+		return fmt.Errorf("error checking if the repository is dirty: %w", err)
 	} else if dirty {
-		if _, err = fmt.Fprintf(os.Stderr, "the repository is dirty. Please commit your changes before continuing"); err != nil {
-			return err
-		}
+		return fmt.Errorf("the repository is dirty. please commit your changes before continuing")
 	}
 
 	if rebaseOrAm, err := IsInRebaseOrAm(ctx); err != nil {
-		if _, err = fmt.Fprintf(os.Stderr, "error checking if the repository is in a rebase or am: %v", err); err != nil {
-			return err
-		}
+		return fmt.Errorf("error checking if the repository is in a rebase or am: %w", err)
 	} else if rebaseOrAm {
-		if _, err = fmt.Fprintf(os.Stderr, "the repository is in a rebase or am. Please resolve the rebase or am before continuing"); err != nil {
-			return err
-		}
+		return fmt.Errorf("the repository is in a rebase or am. please resolve the rebase or am before continuing")
+	}
+
+	stdout, stderr, err := ExecContext(ctx, "gh", "pr", "view", strconv.Itoa(cherryPick.PRNumber), "--json", "state", "--jq", ".state")
+	if err != nil {
+		return fmt.Errorf("error getting PR #%d: %w: %s", cherryPick.PRNumber, err, stderr.String())
+	}
+
+	state := strings.TrimSpace(stdout.String())
+	if state != "MERGED" {
+		return fmt.Errorf("PR #%d is not merged (current state: %s). please ensure the PR is merged before continuing", cherryPick.PRNumber, state)
 	}
 
 	var cherryPickBranchName = fmt.Sprintf("cherry-pick-pr-%d-onto-%s-%d", cherryPick.PRNumber, cherryPick.OnTo, time.Now().Unix())
@@ -73,16 +74,12 @@ func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
 		})
 	} else {
 		tui.WithSpinner(ctx, fmt.Sprintf("Cherry-picking branch %s onto %s", cherryPickBranchName, cherryPick.OnTo), func(ctx context.Context) (string, error) {
-			stdout, stderr, err := ExecContext(ctx, "gh", "pr", "view", strconv.Itoa(cherryPick.PRNumber), "--json", "--mergeCommit", "--jq", ".mergeCommit.oid")
+			stdout, stderr, err = ExecContext(ctx, "gh", "pr", "view", strconv.Itoa(cherryPick.PRNumber), "--json", "mergeCommit", "--jq", ".mergeCommit.oid")
 			if err != nil {
 				return "", fmt.Errorf("error getting PR merge commit: %w: %s", err, stderr.String())
 			}
 
 			mergeCommit := strings.TrimSpace(stdout.String())
-			if len(mergeCommit) == 0 {
-				return "", fmt.Errorf("error getting PR merge commit: please ensure the PR has been merged")
-			}
-
 			if _, stderr, err = ExecContext(ctx, "git", "cherry-pick", "--keep-redundant-commits", mergeCommit); err != nil {
 				return "", fmt.Errorf("error cherry-picking PR merge commit: %w: %s", err, stderr.String())
 			}
