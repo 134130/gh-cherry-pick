@@ -1,0 +1,42 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
+project_name: gh-cherry-pick
+
+builds:
+  - id: gh-cherry-pick
+    binary: gh-cherry-pick
+    main: ./cmd/cherry-pick/
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - windows
+      - linux
+    goarch:
+      - amd64
+      - arm64
+  
+  - id: gh-pr-merged-with
+    binary: gh-pr-merged-with
+    main: ./cmd/pr-merged-with/
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - windows
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - format: tar.gz
+    wrap_in_directory: true
+    name_template: "{{ .Binary }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+
+snapshot:
+  version_template: "SNAPSHOT-{{ .Commit }}"
