@@ -15,7 +15,7 @@ import (
 
 type CherryPick struct {
 	PRNumber int
-	To       string
+	OnTo     string
 	Rebase   bool
 }
 
@@ -40,7 +40,7 @@ func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
 		}
 	}
 
-	var cherryPickBranchName = fmt.Sprintf("cherry-pick-pr-%d-to-%s-%d", cherryPick.PRNumber, cherryPick.To, time.Now().Unix())
+	var cherryPickBranchName = fmt.Sprintf("cherry-pick-pr-%d-onto-%s-%d", cherryPick.PRNumber, cherryPick.OnTo, time.Now().Unix())
 	tui.WithSpinner(ctx, fmt.Sprintf("Fetching PR #%d to branch %s", cherryPick.PRNumber, cherryPickBranchName), func(ctx context.Context) (string, error) {
 
 		if _, stderr, err := ExecContext(ctx, "git", "fetch", "--recurse-submodules", "origin", fmt.Sprintf("pull/%d/head:%s", cherryPick.PRNumber, cherryPickBranchName)); err != nil {
@@ -59,7 +59,7 @@ func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
 	})
 
 	if cherryPick.Rebase {
-		tui.WithSpinner(ctx, fmt.Sprintf("Rebasing branch %s onto %s", cherryPickBranchName, cherryPick.To), func(ctx context.Context) (string, error) {
+		tui.WithSpinner(ctx, fmt.Sprintf("Rebasing branch %s onto %s", cherryPickBranchName, cherryPick.OnTo), func(ctx context.Context) (string, error) {
 			prDiff, stderr, err := gh.ExecContext(ctx, "pr", "diff", strconv.Itoa(cherryPick.PRNumber), "--patch")
 			if err != nil {
 				return "", fmt.Errorf("error getting PR diff: %w: %s", err, stderr.String())
@@ -69,10 +69,10 @@ func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
 				return "", fmt.Errorf("error applying PR diff: %w: %s", err, stderr.String())
 			}
 
-			return fmt.Sprintf("Rebased branch %s onto %s", cherryPickBranchName, cherryPick.To), nil
+			return fmt.Sprintf("Rebased branch %s onto %s", cherryPickBranchName, cherryPick.OnTo), nil
 		})
 	} else {
-		tui.WithSpinner(ctx, fmt.Sprintf("Cherry-picking branch %s onto %s", cherryPickBranchName, cherryPick.To), func(ctx context.Context) (string, error) {
+		tui.WithSpinner(ctx, fmt.Sprintf("Cherry-picking branch %s onto %s", cherryPickBranchName, cherryPick.OnTo), func(ctx context.Context) (string, error) {
 			stdout, stderr, err := ExecContext(ctx, "gh", "pr", "view", strconv.Itoa(cherryPick.PRNumber), "--json", "--mergeCommit", "--jq", ".mergeCommit.oid")
 			if err != nil {
 				return "", fmt.Errorf("error getting PR merge commit: %w: %s", err, stderr.String())
@@ -87,7 +87,7 @@ func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
 				return "", fmt.Errorf("error cherry-picking PR merge commit: %w: %s", err, stderr.String())
 			}
 
-			return fmt.Sprintf("Cherry-picked branch %s onto %s", cherryPickBranchName, cherryPick.To), nil
+			return fmt.Sprintf("Cherry-picked branch %s onto %s", cherryPickBranchName, cherryPick.OnTo), nil
 		})
 	}
 

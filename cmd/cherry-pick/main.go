@@ -9,21 +9,21 @@ import (
 )
 
 var (
-	prNumber = flag.Int("pr", 0, "The PR number to cherry-pick (required)")
-	to       = flag.String("to", "", "The branch to cherry-pick to (required)")
+	prNumber = flag.Int("pr", 0, "The PR number onto cherry-pick (required)")
+	onto     = flag.String("onto", "", "The branch to cherry-pick onto (required)")
 	rebase   = flag.Bool("rebase", false, "Rebase the cherry-pick")
 )
 
 func main() {
 	flag.Parse()
-	if *prNumber == 0 || *to == "" {
+	if *prNumber == 0 || *onto == "" {
 		flag.Usage()
 		os.Exit(2)
 	}
 
 	cherryPick := git.CherryPick{
 		PRNumber: *prNumber,
-		To:       *to,
+		OnTo:     *onto,
 		Rebase:   *rebase,
 	}
 
