@@ -42,17 +42,16 @@ func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
 	}
 
 	var cherryPickBranchName = fmt.Sprintf("cherry-pick-pr-%d-onto-%s-%d", cherryPick.PRNumber, cherryPick.OnTo, time.Now().Unix())
-	tui.WithSpinner(ctx, fmt.Sprintf("Fetching PR #%d to branch %s", cherryPick.PRNumber, cherryPickBranchName), func(ctx context.Context) (string, error) {
-
-		if _, stderr, err := ExecContext(ctx, "git", "fetch", "--recurse-submodules", "origin", fmt.Sprintf("pull/%d/head:%s", cherryPick.PRNumber, cherryPickBranchName)); err != nil {
+	tui.WithSpinner(ctx, fmt.Sprintf("Fetching %s to branch %s", cherryPick.OnTo, cherryPickBranchName), func(ctx context.Context) (string, error) {
+		if _, stderr, err = ExecContext(ctx, "git", "fetch", "--recurse-submodules", "origin", cherryPick.OnTo); err != nil {
 			return "", fmt.Errorf("error fetching PR branch: %w: %s", err, stderr.String())
 		}
 
-		return fmt.Sprintf("Fetched PR #%d to branch %s", cherryPick.PRNumber, cherryPickBranchName), nil
+		return fmt.Sprintf("Fetched %s to branch %s", cherryPick.OnTo, cherryPickBranchName), nil
 	})
 
 	tui.WithSpinner(ctx, fmt.Sprintf("Checking out branch %s", cherryPickBranchName), func(ctx context.Context) (string, error) {
-		if _, stderr, err := ExecContext(ctx, "git", "checkout", cherryPickBranchName); err != nil {
+		if _, stderr, err = ExecContext(ctx, "git", "switch", cherryPickBranchName); err != nil {
 			return "", fmt.Errorf("error checking out branch %s: %w: %s", cherryPickBranchName, err, stderr.String())
 		}
 
