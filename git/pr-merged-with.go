@@ -10,8 +10,9 @@ import (
 type MergeStrategy string
 
 const (
-	Rebase MergeStrategy = "rebase"
-	Squash MergeStrategy = "squash"
+	MergeStrategyRebase MergeStrategy = "rebase"
+	MergeStrategySquash MergeStrategy = "squash"
+	MergeStrategyAuto   MergeStrategy = "auto"
 )
 
 func PRMergedWith(ctx context.Context, prNumber int) (MergeStrategy, error) {
@@ -54,8 +55,8 @@ func inspectMergeStrategy(ctx context.Context, prNumber int, mergeCommitSHA stri
 	}
 
 	if strings.Contains(prevCommitRelatedPRNumbers, strconv.Itoa(prNumber)) {
-		return Rebase, nil
+		return MergeStrategyRebase, nil
 	} else {
-		return Squash, nil
+		return MergeStrategySquash, nil
 	}
 }

@@ -12,7 +12,7 @@ import (
 var (
 	prNumber = flag.Int("pr", 0, "The PR number onto cherry-pick (required)")
 	onto     = flag.String("onto", "", "The branch to cherry-pick onto (required)")
-	rebase   = flag.Bool("rebase", false, "Rebase the cherry-pick")
+	merge    = flag.String("merge", "auto", "The merge strategy to use (rebase, squash, or auto) (default: auto)")
 )
 
 func main() {
@@ -23,9 +23,9 @@ func main() {
 	}
 
 	cherryPick := git.CherryPick{
-		PRNumber: *prNumber,
-		OnTo:     *onto,
-		Rebase:   *rebase,
+		PRNumber:      *prNumber,
+		OnTo:          *onto,
+		MergeStrategy: git.MergeStrategy(*merge),
 	}
 
 	ctx := context.Background()

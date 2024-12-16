@@ -6,20 +6,7 @@ project_name: gh-cherry-pick
 builds:
   - id: gh-cherry-pick
     binary: gh-cherry-pick
-    main: ./cmd/cherry-pick/
-    env:
-      - CGO_ENABLED=0
-    goos:
-      - darwin
-      - windows
-      - linux
-    goarch:
-      - amd64
-      - arm64
-  
-  - id: gh-pr-merged-with
-    binary: gh-pr-merged-with
-    main: ./cmd/pr-merged-with/
+    main: ./cmd/gh-cherry-pick/
     env:
       - CGO_ENABLED=0
     goos:

@@ -13,9 +13,9 @@ import (
 )
 
 type CherryPick struct {
-	PRNumber int
-	OnTo     string
-	Rebase   bool
+	PRNumber      int
+	OnTo          string
+	MergeStrategy MergeStrategy
 }
 
 func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
@@ -59,7 +59,20 @@ func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
 		return fmt.Sprintf("Checked out branch %s", cherryPickBranchName), nil
 	})
 
-	if cherryPick.Rebase {
+	mergeStrategy := cherryPick.MergeStrategy
+	tui.WithSpinner(ctx, fmt.Sprintf("Determining merge strategy for PR #%d", cherryPick.PRNumber), func(ctx context.Context) (string, error) {
+		if cherryPick.MergeStrategy == MergeStrategyAuto {
+			mergeStrategy, err = PRMergedWith(ctx, cherryPick.PRNumber)
+			if err != nil {
+				return "", fmt.Errorf("error determining merge strategy: %w", err)
+			}
+		}
+
+		return fmt.Sprintf("Determined merge strategy for PR #%d: %s", cherryPick.PRNumber, mergeStrategy), nil
+	})
+
+	switch mergeStrategy {
+	case MergeStrategyRebase:
 		tui.WithSpinner(ctx, fmt.Sprintf("Rebasing branch %s onto %s", cherryPickBranchName, cherryPick.OnTo), func(ctx context.Context) (string, error) {
 			prDiff, stderr, err := gh.ExecContext(ctx, "pr", "diff", strconv.Itoa(cherryPick.PRNumber), "--patch")
 			if err != nil {
@@ -72,7 +85,8 @@ func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
 
 			return fmt.Sprintf("Rebased branch %s onto %s", cherryPickBranchName, cherryPick.OnTo), nil
 		})
-	} else {
+
+	case MergeStrategySquash:
 		tui.WithSpinner(ctx, fmt.Sprintf("Cherry-picking branch %s onto %s", cherryPickBranchName, cherryPick.OnTo), func(ctx context.Context) (string, error) {
 			stdout, stderr, err = ExecContext(ctx, "gh", "pr", "view", strconv.Itoa(cherryPick.PRNumber), "--json", "mergeCommit", "--jq", ".mergeCommit.oid")
 			if err != nil {
