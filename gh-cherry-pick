@@ -4,101 +4,12 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-source gh_utils.sh
+PROGRAM_ROOT=$(dirname "${BASH_SOURCE[0]}")
 
-err() {
-  echo "[$(date +'%Y-%m-%dT%H:%M:%S%z')]: $*" >&2
-}
-
-usage() {
-  cat <<EOF
-Cherry-pick a merged PR to specified branch.
-
-Usage: gh cherry-pick --pr <pr_number> --to <target_branch> [--rebase]
-
-  --pr  	  The PR number to cherry-pick. (required)
-  --to      The branch to cherry-pick the PR on top of. (required)
-  --rebase  Rebase the commits related of PR.
-            (default: Merged commit will be cherry-picked)
-EOF
-}
-
-parse_params() {
-  rebase=0
-
-  while :; do
-    case "${1-}" in
-		-h | --help)
-		  usage
-			exit
-			;;
-		--pr)
-		  pr_number="${2-}"
-		  shift
-		  ;;
-		--to)
-		  target_branch="${2-}"
-		  shift
-		  ;;
- 		--rebase) rebase=1 ;;
- 		-?*)
- 		  err "Unknown option: $1"
- 		  exit 1
-			;;
-	  *) break ;;
-    esac
-    shift
-	done
-
-	if [[ -z "${pr_number-}" ]]; then
-		err "Missing required parameter: --pr"
-		exit 1
-	fi
-
-	if [[ -z "${target_branch-}" ]]; then
-		err "Missing required parameter: --to"
-		exit 1
-	fi
-}
-
-cherry_pick() {
-  local pr_number=$1
-  local target_branch=$2
-  local rebase=$3
-
-  local cherry_pick_branch_name
-  cherry_pick_branch_name=$(echo "cherry-pick-pr-${pr_number}-to-${target_branch}-$(date +%s)" | sed 's/\//-/g')
-  declare -r cherry_pick_branch_name
-
-  git fetch origin "${target_branch}"
-  git checkout --recurse-submodules -b "${cherry_pick_branch_name}" "origin/${target_branch}"
-  git reset --hard origin/"${target_branch}"
-
-  if [[ $rebase == 1 ]]; then
-    gh pr diff "${pr_number}" --patch > "/tmp/${pr_number}.patch"
-    git am -3 "/tmp/${pr_number}.patch"
-    rm -f "/tmp/${pr_number}.patch"
-  else
-    local merge_commit_sha
-    merge_commit_sha=$(gh pr view "${pr_number}" --json mergeCommit --jq .mergeCommit.oid)
-    if [[ -z "${merge_commit_sha}" ]]; then
-      err "Failed to get merge commit sha. Please check if the PR is merged."
-      exit 1
-    fi
-    git cherry-pick --keep-redundant-commits "${merge_commit_sha}"
-  fi
-}
-
-parse_params "$@"
-
-if gh_utils::is_dirty; then
-  err "You have uncommitted changes. Please commit or stash them before cherry-picking."
+if ! command -v go >/dev/null; then
+  echo "Go not found on the system" >&2
   exit 1
 fi
 
-if gh_utils::is_in_rebase_or_am; then
-  err "You are in the middle of a rebase or am. Please finish it before cherry-picking."
-  exit 1
-fi
-
-cherry_pick "${pr_number}" "${target_branch}" "${rebase}"
+(cd "${PROGRAM_ROOT}" && go build -o gh-cherry-pick.out ./cmd/cherry-pick)
+exec "${PROGRAM_ROOT}/gh-cherry-pick.out" "$@"
