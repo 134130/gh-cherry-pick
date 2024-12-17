@@ -19,7 +19,7 @@ builds:
 
 archives:
   - format: tar.gz
-    wrap_in_directory: true
+    wrap_in_directory: false
     name_template: "{{ .Binary }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
     files:
       - LICENSE

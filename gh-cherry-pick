@@ -4,12 +4,53 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-PROGRAM_ROOT=$(dirname "${BASH_SOURCE[0]}")
+PROGRAM_ROOT=$(realpath "$(dirname "${BASH_SOURCE[0]}")")
 
-if ! command -v go >/dev/null; then
-  echo "Go not found on the system" >&2
-  exit 1
+if test -f "${PROGRAM_ROOT}/dist/gh-cherry-pick"; then
+  exec "${PROGRAM_ROOT}/gh-cherry-pick.out" "$@"
+  return
 fi
 
-(cd "${PROGRAM_ROOT}" && go build -o gh-cherry-pick.out ./cmd/cherry-pick)
-exec "${PROGRAM_ROOT}/gh-cherry-pick.out" "$@"
+OS=$(uname -s)
+ARCH=$(uname -m)
+
+case "${OS}" in
+  Linux)
+    OS=linux
+    ;;
+  Darwin)
+    OS=darwin
+    ;;
+  *)
+    OS=unknown
+    exit 1
+    ;;
+esac
+
+case "${ARCH}" in
+  x86_64)
+    ARCH=amd64
+    ;;
+  arm64)
+    ARCH=arm64
+    ;;
+  *)
+    ARCH=unknown
+    exit 1
+    ;;
+esac
+
+if [[ "${OS}" == "unknown" || "${ARCH}" == "unknown" ]]; then
+  # Unsupported OS or Architecture. Run the script with go instead.
+  if ! command -v go >/dev/null; then
+    echo "Go not found on the system" >&2
+    exit 1
+  fi
+
+  (cd "${PROGRAM_ROOT}" && go build -o dist/gh-cherry-pick ./cmd/gh-cherry-pick)
+  exec "${PROGRAM_ROOT}/gh-cherry-pick.out" "$@"
+else
+  GH_CHERRY_PICK_VERSION="1.0.0"
+  curl -sSL "https://github.com/134130/gh-cherry-pick/releases/download/v${GH_CHERRY_PICK_VERSION}/gh-cherry-pick-${GH_CHERRY_PICK_VERSION}-${OS}-${ARCH}.tar.gz" | tar -xz -C "${PROGRAM_ROOT}/dist" gh-cherry-pick
+  exec "${PROGRAM_ROOT}/gh-cherry-pick.out" "$@"
+fi
