@@ -7,7 +7,7 @@ set -o pipefail
 PROGRAM_ROOT=$(realpath "$(dirname "${BASH_SOURCE[0]}")")
 
 if test -f "${PROGRAM_ROOT}/dist/gh-cherry-pick"; then
-  exec "${PROGRAM_ROOT}/gh-cherry-pick.out" "$@"
+  exec "${PROGRAM_ROOT}/dist/gh-cherry-pick" "$@"
   return
 fi
 
@@ -48,9 +48,9 @@ if [[ "${OS}" == "unknown" || "${ARCH}" == "unknown" ]]; then
   fi
 
   (cd "${PROGRAM_ROOT}" && go build -o dist/gh-cherry-pick ./cmd/gh-cherry-pick)
-  exec "${PROGRAM_ROOT}/gh-cherry-pick.out" "$@"
+  exec "${PROGRAM_ROOT}/dist/gh-cherry-pick" "$@"
 else
   GH_CHERRY_PICK_VERSION="1.0.0"
   curl -sSL "https://github.com/134130/gh-cherry-pick/releases/download/v${GH_CHERRY_PICK_VERSION}/gh-cherry-pick-${GH_CHERRY_PICK_VERSION}-${OS}-${ARCH}.tar.gz" | tar -xz -C "${PROGRAM_ROOT}/dist" gh-cherry-pick
-  exec "${PROGRAM_ROOT}/gh-cherry-pick.out" "$@"
+  exec "${PROGRAM_ROOT}/dist/gh-cherry-pick" "$@"
 fi
