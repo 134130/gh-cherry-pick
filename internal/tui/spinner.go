@@ -9,12 +9,6 @@ import (
 	"github.com/fatih/color"
 )
 
-var (
-	cyan  = color.New(color.FgCyan).SprintFunc()
-	green = color.New(color.FgGreen).SprintFunc()
-	red   = color.New(color.FgRed).SprintFunc()
-)
-
 func PrintSuccess(message string) {
 	_, _ = fmt.Fprintf(color.Output, "%s %s\n", green("✔"), message)
 }
@@ -23,16 +17,19 @@ func PrintError(message string) {
 	_, _ = fmt.Fprintf(color.Output, "%s %s\n", red("x"), message)
 }
 
-func WithSpinner(ctx context.Context, message string, f func(ctx context.Context) (string, error)) {
+func WithSpinner(ctx context.Context, message string, f func(ctx context.Context) (string, error)) (err error) {
 	sp := spinner.New(spinner.CharSets[14], 40*time.Millisecond, spinner.WithColor("cyan"))
 	sp.Suffix = " " + message
 	sp.Start()
 
-	if str, err := f(ctx); err != nil {
+	var str string
+	defer func() {
 		sp.Stop()
-		PrintError(err.Error())
-	} else {
-		sp.Stop()
-		PrintSuccess(str)
-	}
+		if err == nil {
+			PrintSuccess(str)
+		}
+	}()
+
+	str, err = f(ctx)
+	return
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"os"
+	"os/signal"
 
 	"github.com/134130/gh-cherry-pick/git"
 	"github.com/134130/gh-cherry-pick/internal/tui"
@@ -28,7 +29,9 @@ func main() {
 		MergeStrategy: git.MergeStrategy(*merge),
 	}
 
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+
 	if err := cherryPick.RunWithContext(ctx); err != nil {
 		tui.PrintError(err.Error())
 		os.Exit(1)

@@ -2,9 +2,13 @@ package git
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
+
+	"github.com/134130/gh-cherry-pick/gitobj"
 )
 
 func GetNameWithOwner(ctx context.Context) (string, error) {
@@ -22,6 +26,19 @@ func GetRepoRoot(ctx context.Context) (string, error) {
 	}
 
 	return strings.TrimSpace(stdout.String()), nil
+}
+
+func GetPullRequest(ctx context.Context, number int) (*gitobj.PullRequest, error) {
+	stdout, stderr, err := ExecContext(ctx, "gh", "pr", "view", strconv.Itoa(number), "--json", "number,title,url,author,state,isDraft")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get the pull request: %w: %s", err, stderr.String())
+	}
+
+	var pr gitobj.PullRequest
+	if err = json.Unmarshal(stdout.Bytes(), &pr); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal the pull request: %w", err)
+	}
+	return &pr, nil
 }
 
 func IsDirty(ctx context.Context) (bool, error) {
