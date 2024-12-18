@@ -102,7 +102,7 @@ func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
 				return "", fmt.Errorf("error applying PR diff\nplease resolve the conflicts and run %s. if you want to abort the rebase, run %s", tui.Green("`git am --continue`"), tui.Yellow("`git am --abort`"))
 			}
 
-			return fmt.Sprintf("rebased branch %s onto %s", cherryPickBranchName, cherryPick.OnTo), nil
+			return fmt.Sprintf("rebased branch %s onto %s", tui.Cyan(cherryPickBranchName), tui.Cyan(cherryPick.OnTo)), nil
 		})
 		if err != nil {
 			return err
