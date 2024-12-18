@@ -15,19 +15,12 @@ import (
 type Command struct {
 	cmd  string
 	args []string
-
-	stdin  io.Reader
-	stdout io.Writer
-	stderr io.Writer
 }
 
 func NewCommand(cmd string, args ...string) *Command {
 	return &Command{
-		cmd:    cmd,
-		args:   args,
-		stdin:  &bytes.Buffer{},
-		stdout: &bytes.Buffer{},
-		stderr: &bytes.Buffer{},
+		cmd:  cmd,
+		args: args,
 	}
 }
 
@@ -44,12 +37,13 @@ func (c *Command) Run(ctx context.Context, mods ...CommandModifier) error {
 	}
 
 	cmd := exec.CommandContext(ctx, exe, c.args...)
-	cmd.Stdin = c.stdin
-	cmd.Stdout = c.stdout
-	cmd.Stderr = c.stderr
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
 
 	for _, mod := range mods {
-		mod(c)
+		mod(cmd)
 	}
 
 	err = cmd.Run()
@@ -59,7 +53,7 @@ func (c *Command) Run(ctx context.Context, mods ...CommandModifier) error {
 			ge := GitError{err: err}
 			var exitError *exec.ExitError
 			if errors.As(err, &exitError) {
-				ge.Stderr = string(exitError.Stderr)
+				ge.Stderr = stderr.String()
 				ge.ExitCode = exitError.ExitCode()
 			}
 			return &ge
@@ -68,7 +62,7 @@ func (c *Command) Run(ctx context.Context, mods ...CommandModifier) error {
 			ge := GHError{err: err}
 			var exitError *exec.ExitError
 			if errors.As(err, &exitError) {
-				ge.Stderr = string(exitError.Stderr)
+				ge.Stderr = stderr.String()
 				ge.ExitCode = exitError.ExitCode()
 			}
 			return &ge
@@ -80,17 +74,17 @@ func (c *Command) Run(ctx context.Context, mods ...CommandModifier) error {
 	return nil
 }
 
-type CommandModifier func(*Command)
+type CommandModifier func(c *exec.Cmd)
 
 func WithStdout(stdout io.Writer) CommandModifier {
-	return func(c *Command) {
-		c.stdout = stdout
+	return func(c *exec.Cmd) {
+		c.Stdout = stdout
 	}
 }
 
 func WithStdin(stdin io.Reader) CommandModifier {
-	return func(c *Command) {
-		c.stdin = stdin
+	return func(c *exec.Cmd) {
+		c.Stdin = stdin
 	}
 }
 

@@ -27,7 +27,7 @@ func (ge *GitError) Error() string {
 	if ge.Stderr == "" {
 		return fmt.Sprintf("failed to run git: %v", ge.err)
 	}
-	return fmt.Sprintf("failed to run git: %s", ge.Stderr)
+	return fmt.Sprintf("failed to run git: %v", ge.Stderr)
 }
 
 func (ge *GitError) Unwrap() error {
@@ -44,7 +44,7 @@ func (ge *GHError) Error() string {
 	if ge.Stderr == "" {
 		return fmt.Sprintf("failed to run gh: %v", ge.err)
 	}
-	return fmt.Sprintf("failed to run gh: %s", ge.Stderr)
+	return fmt.Sprintf("failed to run gh: %v", ge.Stderr)
 }
 
 func (ge *GHError) Unwrap() error {
