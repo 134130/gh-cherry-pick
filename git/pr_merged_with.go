@@ -1,6 +1,7 @@
 package git
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strconv"
@@ -16,9 +17,9 @@ const (
 )
 
 func PRMergedWith(ctx context.Context, prNumber int) (MergeStrategy, error) {
-	stdout, stderr, err := ExecContext(ctx, "gh", "pr", "view", strconv.Itoa(prNumber), "--json", "mergeCommit", "--jq", ".mergeCommit.oid")
-	if err != nil {
-		return "", fmt.Errorf("failed to get merge commit SHA for PR #%d: %w: %s", prNumber, err, stderr.String())
+	stdout := &bytes.Buffer{}
+	if err := NewCommand("gh", "pr", "view", strconv.Itoa(prNumber), "--json", "mergeCommit", "--jq", ".mergeCommit.oid").Run(ctx, WithStdout(stdout)); err != nil {
+		return "", fmt.Errorf("failed to get merge commit SHA for PR #%d: %w", prNumber, err)
 	}
 
 	mergeCommitSHA := strings.TrimSpace(stdout.String())
@@ -35,18 +36,25 @@ func inspectMergeStrategy(ctx context.Context, prNumber int, mergeCommitSHA stri
 		return "", fmt.Errorf("failed to get repository name with owner: %w", err)
 	}
 
-	stdout, stderr, err := ExecContext(ctx, "gh", "api", fmt.Sprintf("repos/%s/commits/%s~1", nameWithOwner, mergeCommitSHA), "--jq", ".sha")
-	if err != nil {
-		return "", fmt.Errorf("failed to get previous commit SHA for merge commit %s: %w: %s", mergeCommitSHA, err, stderr.String())
+	endpoint := fmt.Sprintf("repos/%v/commits/%v~1", nameWithOwner, mergeCommitSHA)
+	args := []string{"api", endpoint, "--jq", ".sha"}
+
+	stdout := &bytes.Buffer{}
+	if err = NewCommand("gh", args...).Run(ctx, WithStdout(stdout)); err != nil {
+		return "", fmt.Errorf("failed to get previous commit SHA for merge commit %s: %w", mergeCommitSHA, err)
 	}
 
 	prevCommitSHA := strings.TrimSpace(stdout.String())
-	stdout, stderr, err = ExecContext(ctx, "gh", "api",
-		"-H", "Accept: application/vnd.github+json",
-		"-H", "X-GitHub-Api-Version: 2022-11-28",
-		fmt.Sprintf("repos/%s/commits/%s/pulls", nameWithOwner, prevCommitSHA), "--jq", ".[].number")
-	if err != nil {
-		return "", fmt.Errorf("failed to get related PR numbers for commit %s: %w: %s", prevCommitSHA, err, stderr.String())
+
+	endpoint = fmt.Sprintf("repos/%v/commits/%v/pulls", nameWithOwner, prevCommitSHA)
+	args = []string{"api"}
+	args = append(args, "-H", "Accept: application/vnd.github+json")
+	args = append(args, "-H", "X-GitHub-Api-Version: 2022-11-28")
+	args = append(args, endpoint, "--jq", ".[].number")
+
+	stdout = &bytes.Buffer{}
+	if err = NewCommand("gh", args...).Run(ctx, WithStdout(stdout)); err != nil {
+		return "", fmt.Errorf("failed to get related PR numbers for commit %s: %w", prevCommitSHA, err)
 	}
 
 	prevCommitRelatedPRNumbers := strings.TrimSpace(stdout.String())
