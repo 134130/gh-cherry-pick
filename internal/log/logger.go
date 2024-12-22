@@ -6,7 +6,7 @@ import (
 
 	"github.com/fatih/color"
 
-	"github.com/134130/gh-cherry-pick/internal/tui"
+	internalColor "github.com/134130/gh-cherry-pick/internal/color"
 )
 
 type Logger interface {
@@ -45,19 +45,19 @@ type logger struct {
 }
 
 func (l *logger) Infof(s string, i ...interface{}) {
-	_, _ = fmt.Fprintf(color.Output, "%*s %s %s\n", l.Indent, "", tui.Blue("•"), fmt.Sprintf(s, i...))
+	_, _ = fmt.Fprintf(color.Output, "%*s %s %s\n", l.Indent, "", internalColor.Blue("•"), fmt.Sprintf(s, i...))
 }
 
 func (l *logger) Warnf(s string, i ...interface{}) {
-	_, _ = fmt.Fprintf(color.Output, "%*s %s %s\n", l.Indent, "", tui.Yellow("!️"), fmt.Sprintf(s, i...))
+	_, _ = fmt.Fprintf(color.Output, "%*s %s %s\n", l.Indent, "", internalColor.Yellow("!️"), fmt.Sprintf(s, i...))
 }
 
 func (l *logger) Successf(s string, i ...interface{}) {
-	_, _ = fmt.Fprintf(color.Output, "%*s %s %s\n", l.Indent, "", tui.Green("✔"), fmt.Sprintf(s, i...))
+	_, _ = fmt.Fprintf(color.Output, "%*s %s %s\n", l.Indent, "", internalColor.Green("✔"), fmt.Sprintf(s, i...))
 }
 
 func (l *logger) Failf(s string, i ...interface{}) {
-	_, _ = fmt.Fprintf(color.Output, "%*s %s %s\n", l.Indent, "", tui.Red("✘"), fmt.Sprintf(s, i...))
+	_, _ = fmt.Fprintf(color.Output, "%*s %s %s\n", l.Indent, "", internalColor.Red("✘"), fmt.Sprintf(s, i...))
 }
 
 func (l *logger) IncreaseIndent() {

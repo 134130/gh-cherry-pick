@@ -8,7 +8,6 @@ import (
 
 	"github.com/134130/gh-cherry-pick/git"
 	"github.com/134130/gh-cherry-pick/internal/log"
-	"github.com/134130/gh-cherry-pick/internal/tui"
 )
 
 var (
@@ -38,7 +37,7 @@ func main() {
 	ctx = log.CtxWithLogger(ctx)
 
 	if err := cherryPick.RunWithContext(ctx); err != nil {
-		tui.PrintError(err.Error())
+		log.LoggerFromCtx(ctx).Failf(err.Error())
 		os.Exit(1)
 	}
 }

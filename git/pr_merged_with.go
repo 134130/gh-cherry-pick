@@ -58,10 +58,6 @@ func inspectMergeStrategy(ctx context.Context, prNumber int, mergeCommitSHA stri
 	}
 
 	prevCommitRelatedPRNumbers := strings.TrimSpace(stdout.String())
-	if len(prevCommitRelatedPRNumbers) == 0 {
-		return "", fmt.Errorf("failed to get related PR numbers for commit %s: no related PRs", prevCommitSHA)
-	}
-
 	if strings.Contains(prevCommitRelatedPRNumbers, strconv.Itoa(prNumber)) {
 		return MergeStrategyRebase, nil
 	} else {

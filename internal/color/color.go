@@ -1,4 +1,4 @@
-package tui
+package color
 
 import (
 	"github.com/fatih/color"

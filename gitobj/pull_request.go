@@ -3,7 +3,7 @@ package gitobj
 import (
 	"fmt"
 
-	"github.com/134130/gh-cherry-pick/internal/tui"
+	"github.com/134130/gh-cherry-pick/internal/color"
 )
 
 type PullRequestState string
@@ -26,24 +26,26 @@ type PullRequest struct {
 	MergeCommit struct {
 		Sha string `json:"oid"`
 	} `json:"mergeCommit"`
+	BaseRefName string `json:"baseRefName"`
+	HeadRefName string `json:"headRefName"`
 }
 
 func (pr PullRequest) StateString() string {
 	switch pr.State {
 	case PullRequestStateOpen:
-		return tui.Green("open")
+		return color.Green("open")
 	case PullRequestStateClosed:
-		return tui.Red("closed")
+		return color.Red("closed")
 	case PullRequestStateMerged:
-		return tui.Purple("merged")
+		return color.Purple("merged")
 	default:
 		if pr.IsDraft {
-			return tui.Grey("draft")
+			return color.Grey("draft")
 		}
 		return "UNKNOWN"
 	}
 }
 
 func (pr PullRequest) PRNumberString() string {
-	return tui.Cyan(fmt.Sprintf("#%d", pr.Number))
+	return color.Cyan(fmt.Sprintf("#%d", pr.Number))
 }

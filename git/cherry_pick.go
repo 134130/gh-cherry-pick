@@ -3,12 +3,14 @@ package git
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/134130/gh-cherry-pick/gitobj"
+	"github.com/134130/gh-cherry-pick/internal/color"
 	"github.com/134130/gh-cherry-pick/internal/log"
 	"github.com/134130/gh-cherry-pick/internal/tui"
 )
@@ -45,12 +47,14 @@ func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
 	logger.Successf("repository is available for cherry-pick")
 
 	var pr *gitobj.PullRequest
-	title := fmt.Sprintf("fetching the pull request %s ...", tui.Cyan(fmt.Sprintf("#%d", cherryPick.PRNumber)))
+	title := fmt.Sprintf("fetching the pull request %s ...", color.Cyan(fmt.Sprintf("#%d", cherryPick.PRNumber)))
 	err = tui.WithSpinner(ctx, title, func(ctx context.Context, logger log.Logger) error {
-		logger.Infof("getting the pull request %s ...", tui.Cyan(fmt.Sprintf("#%d", cherryPick.PRNumber)))
+		logger.Infof("getting the pull request %s", color.Cyan(fmt.Sprintf("#%d", cherryPick.PRNumber)))
 		if pr, err = GetPullRequest(ctx, cherryPick.PRNumber); err != nil {
 			return fmt.Errorf("error getting the pull request: %w", err)
 		}
+
+		logger.Infof("%v (%v) by %v\n  %v ← %v", color.Cyan(pr.Title), pr.PRNumberString(), color.Cyan(pr.Author.Login), color.Cyan(pr.BaseRefName), color.Cyan(pr.HeadRefName))
 
 		if pr.State != gitobj.PullRequestStateMerged {
 			return fmt.Errorf("PR %s is not merged (current state: %s). please ensure the PR is merged before continuing", pr.PRNumberString(), pr.StateString())
@@ -61,7 +65,7 @@ func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	logger.Successf("fetched the pull request - %v (%v) by %v", tui.Cyan(pr.Title), pr.PRNumberString(), tui.Cyan(pr.Author.Login))
+	logger.Successf("fetched the pull request")
 
 	var mergeStrategy MergeStrategy
 	err = tui.WithSpinner(ctx, "determining merge strategy ...", func(ctx context.Context, logger log.Logger) error {
@@ -72,7 +76,7 @@ func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
 				return fmt.Errorf("error determining merge strategy: %w", err)
 			}
 		} else {
-			logger.Infof("using merge strategy %s with given flag", tui.Cyan(cherryPick.MergeStrategy))
+			logger.Infof("using merge strategy %s with given flag", color.Cyan(cherryPick.MergeStrategy))
 		}
 
 		return nil
@@ -80,38 +84,24 @@ func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	logger.Successf("determined merge strategy as %s", tui.Cyan(mergeStrategy))
-
-	err = tui.WithSpinner(ctx, "fetching the commits between the PR and the target branch ...", func(ctx context.Context, logger log.Logger) error {
-		logger.Infof("getting the merge base between %v and %v", tui.Cyan(pr.MergeCommit.Sha), tui.Cyan(fmt.Sprintf("origin/%s", cherryPick.OnTo)))
-		mergeBase, err := GetMergeBase(ctx, pr.MergeCommit.Sha, fmt.Sprintf("origin/%s", cherryPick.OnTo))
-		if err != nil {
-			return fmt.Errorf("error getting the merge base: %w", err)
-		}
-
-		logger.Infof("fetching the commits between %v and %v", tui.Cyan(mergeBase), tui.Cyan(pr.MergeCommit.Sha))
-		if err = Fetch(ctx, "origin", fmt.Sprintf("%s..%s", mergeBase, pr.MergeCommit.Sha)); err != nil {
-			return fmt.Errorf("error fetching the commits between the PR and the target branch: %w", err)
-		}
-
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-	logger.Successf("fetched the commits between the PR and the target branch")
+	logger.Successf("determined merge strategy as %s", color.Cyan(mergeStrategy))
 
 	var cherryPickBranchName = fmt.Sprintf("cherry-pick-pr-%d-onto-%s-%d", cherryPick.PRNumber, strings.ReplaceAll(cherryPick.OnTo, "/", "-"), time.Now().Unix())
 	err = tui.WithSpinner(ctx, "checking out branch ...", func(ctx context.Context, logger log.Logger) error {
-		logger.Infof("branch name:    %v", tui.Cyan(cherryPickBranchName))
-		logger.Infof("starting point: %v", tui.Cyan(fmt.Sprintf("origin/%s", cherryPick.OnTo)))
+		logger.Infof("branch name:    %v", color.Cyan(cherryPickBranchName))
+		logger.Infof("starting point: %v", color.Cyan(fmt.Sprintf("origin/%s", cherryPick.OnTo)))
 
-		logger.Infof("fetching the branch %v", tui.Cyan(cherryPick.OnTo))
+		logger.Infof("fetching the branch %v", color.Cyan(pr.BaseRefName))
+		if err = Fetch(ctx, "origin", pr.BaseRefName); err != nil {
+			return fmt.Errorf("error fetching the branch '%s': %w", cherryPick.OnTo, err)
+		}
+
+		logger.Infof("fetching the branch %v", color.Cyan(cherryPick.OnTo))
 		if err = Fetch(ctx, "origin", cherryPick.OnTo); err != nil {
 			return fmt.Errorf("error fetching the branch '%s': %w", cherryPick.OnTo, err)
 		}
 
-		logger.Infof("checking out a new branch %v based on %v", tui.Cyan(cherryPickBranchName), tui.Cyan(cherryPick.OnTo))
+		logger.Infof("checking out a new branch %v based on %v", color.Cyan(cherryPickBranchName), color.Cyan(cherryPick.OnTo))
 		if err = CheckoutNewBranch(ctx, cherryPickBranchName, fmt.Sprintf("origin/%s", cherryPick.OnTo)); err != nil {
 			return err
 		}
@@ -121,7 +111,7 @@ func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	logger.Successf("checked out to %s based on %s", tui.Cyan(cherryPickBranchName), tui.Cyan(cherryPick.OnTo))
+	logger.Successf("checked out to %s based on %s", color.Cyan(cherryPickBranchName), color.Cyan(cherryPick.OnTo))
 
 	switch mergeStrategy {
 	case MergeStrategyRebase:
@@ -134,7 +124,11 @@ func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
 
 			logger.Infof("applying diff")
 			if err = NewCommand("git", "am", "-3").Run(ctx, WithStdin(&prDiff)); err != nil {
-				return fmt.Errorf("error applying PR diff\nplease resolve the conflicts and run %s. if you want to abort the rebase, run %s", tui.Green("`git am --continue`"), tui.Yellow("`git am --abort`"))
+				var gitError *GitError
+				if errors.As(err, &gitError) && gitError.ExitCode == 1 && strings.Contains(gitError.Stderr, "error: could not apply") {
+					return fmt.Errorf("error applying PR diff\nplease resolve the conflicts and run %s. if you want to abort the rebase, run %s", color.Green("`git am --continue`"), color.Yellow("`git am --abort`"))
+				}
+				return fmt.Errorf("error cherry-picking PR merge commit: %w", err)
 			}
 
 			return nil
@@ -142,14 +136,17 @@ func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		logger.Successf("rebased branch %s onto %s", tui.Cyan(cherryPickBranchName), tui.Cyan(cherryPick.OnTo))
+		logger.Successf("rebased branch %s onto %s", color.Cyan(cherryPickBranchName), color.Cyan(cherryPick.OnTo))
 
 	case MergeStrategySquash:
 		err = tui.WithSpinner(ctx, "cherry-picking ...", func(ctx context.Context, logger log.Logger) error {
-			logger.Infof("cherry-picking PR merge commit %v", tui.Cyan(pr.MergeCommit.Sha))
+			logger.Infof("cherry-picking PR merge commit %v", color.Cyan(pr.MergeCommit.Sha))
 			if err = NewCommand("git", "cherry-pick", "--keep-redundant-commits", pr.MergeCommit.Sha).Run(ctx); err != nil {
-				// TODO: handle conflict message
-				return fmt.Errorf("error cherry-picking PR merge commit\nplease resolve the conflicts and run %v. if you want to abort the cherry-pick, run %v\n\n%v", tui.Green("`git cherry-pick --continue`"), tui.Yellow("`git cherry-pick --abort`"), err)
+				var gitError *GitError
+				if errors.As(err, &gitError) && gitError.ExitCode == 1 && strings.Contains(gitError.Stderr, "error: could not apply") {
+					return fmt.Errorf("error cherry-picking PR merge commit\nplease resolve the conflicts and run %v. if you want to abort the cherry-pick, run %v\n\n%v", color.Green("`git cherry-pick --continue`"), color.Yellow("`git cherry-pick --abort`"), err)
+				}
+				return fmt.Errorf("error cherry-picking PR merge commit: %w", err)
 			}
 
 			return nil
@@ -157,7 +154,7 @@ func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		logger.Successf("cherry-picked branch %s onto %s", tui.Cyan(cherryPickBranchName), tui.Cyan(cherryPick.OnTo))
+		logger.Successf("cherry-picked branch %s onto %s", color.Cyan(cherryPickBranchName), color.Cyan(cherryPick.OnTo))
 	}
 
 	return nil
