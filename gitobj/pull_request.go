@@ -47,5 +47,18 @@ func (pr PullRequest) StateString() string {
 }
 
 func (pr PullRequest) PRNumberString() string {
-	return color.Cyan(fmt.Sprintf("#%d", pr.Number))
+	str := fmt.Sprintf("#%d", pr.Number)
+	switch pr.State {
+	case PullRequestStateOpen:
+		return color.Green(str)
+	case PullRequestStateClosed:
+		return color.Red(str)
+	case PullRequestStateMerged:
+		return color.Purple(str)
+	default:
+		if pr.IsDraft {
+			return color.Grey(str)
+		}
+		return "UNKNOWN"
+	}
 }

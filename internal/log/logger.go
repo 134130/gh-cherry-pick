@@ -3,22 +3,19 @@ package log
 import (
 	"context"
 	"fmt"
+	"os"
 
-	"github.com/fatih/color"
+	"github.com/charmbracelet/lipgloss"
 
-	internalColor "github.com/134130/gh-cherry-pick/internal/color"
+	"github.com/134130/gh-cherry-pick/internal/color"
 )
 
-type Logger interface {
-	Infof(string, ...interface{})
-	Warnf(string, ...interface{})
-	Successf(string, ...interface{})
-	Failf(string, ...interface{})
-
-	IncreaseIndent()
-	DecreaseIndent()
-	ResetIndent()
-}
+var (
+	infoIcon    = color.Blue("•")
+	warnIcon    = color.Yellow("!️")
+	successIcon = color.Green("✔")
+	failIcon    = color.Red("✘")
+)
 
 func NewLogger() Logger {
 	return &logger{}
@@ -44,20 +41,44 @@ type logger struct {
 	Indent int
 }
 
+func (l *logger) WithField(s string, i interface{}) Logger {
+	return newEntry(l).WithField(s, i)
+}
+
+func (l *logger) WithError(err error) Logger {
+	return newEntry(l).WithError(err)
+}
+
+func (l *logger) Info(s string) {
+	l.print(infoIcon, s)
+}
+
+func (l *logger) Warn(s string) {
+	l.print(warnIcon, s)
+}
+
+func (l *logger) Success(s string) {
+	l.print(successIcon, s)
+}
+
+func (l *logger) Fail(s string) {
+	l.print(failIcon, s)
+}
+
 func (l *logger) Infof(s string, i ...interface{}) {
-	_, _ = fmt.Fprintf(color.Output, "%*s %s %s\n", l.Indent, "", internalColor.Blue("•"), fmt.Sprintf(s, i...))
+	l.print(infoIcon, fmt.Sprintf(s, i...))
 }
 
 func (l *logger) Warnf(s string, i ...interface{}) {
-	_, _ = fmt.Fprintf(color.Output, "%*s %s %s\n", l.Indent, "", internalColor.Yellow("!️"), fmt.Sprintf(s, i...))
+	l.print(warnIcon, fmt.Sprintf(s, i...))
 }
 
 func (l *logger) Successf(s string, i ...interface{}) {
-	_, _ = fmt.Fprintf(color.Output, "%*s %s %s\n", l.Indent, "", internalColor.Green("✔"), fmt.Sprintf(s, i...))
+	l.print(successIcon, fmt.Sprintf(s, i...))
 }
 
 func (l *logger) Failf(s string, i ...interface{}) {
-	_, _ = fmt.Fprintf(color.Output, "%*s %s %s\n", l.Indent, "", internalColor.Red("✘"), fmt.Sprintf(s, i...))
+	l.print(failIcon, fmt.Sprintf(s, i...))
 }
 
 func (l *logger) IncreaseIndent() {
@@ -70,4 +91,11 @@ func (l *logger) DecreaseIndent() {
 
 func (l *logger) ResetIndent() {
 	l.Indent = 0
+}
+
+func (l *logger) print(icon, msg string) {
+	bullet := lipgloss.NewStyle().PaddingLeft(1 + l.Indent).Render(icon)
+	content := lipgloss.NewStyle().PaddingLeft(1).Render(msg)
+
+	_, _ = fmt.Fprintln(os.Stdout, lipgloss.JoinHorizontal(lipgloss.Top, bullet, content))
 }
