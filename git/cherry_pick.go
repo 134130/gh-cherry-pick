@@ -157,5 +157,20 @@ func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
 		logger.Successf("cherry-picked branch %s onto %s", color.Cyan(cherryPickBranchName), color.Cyan(cherryPick.OnTo))
 	}
 
+	if cherryPick.Push {
+		err = tui.WithSpinner(ctx, "pushing ...", func(ctx context.Context, logger log.Logger) error {
+			logger.Infof("pushing branch %v", color.Cyan(cherryPickBranchName))
+			if err = Push(ctx, "origin", cherryPickBranchName); err != nil {
+				return fmt.Errorf("error pushing branch %s: %w", cherryPickBranchName, err)
+			}
+
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+		logger.Successf("pushed branch %s", color.Cyan(cherryPickBranchName))
+	}
+
 	return nil
 }
