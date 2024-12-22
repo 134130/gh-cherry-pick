@@ -5,6 +5,7 @@ import (
 )
 
 var (
+	blue   = color.New(color.FgBlue).SprintFunc()
 	cyan   = color.New(color.FgCyan).SprintFunc()
 	green  = color.New(color.FgGreen).SprintFunc()
 	red    = color.New(color.FgRed).SprintFunc()
@@ -12,6 +13,10 @@ var (
 	purple = color.New(color.FgMagenta).SprintFunc()
 	grey   = color.New(color.FgHiWhite).SprintFunc()
 )
+
+func Blue(a ...interface{}) string {
+	return blue(a...)
+}
 
 func Cyan(a ...interface{}) string {
 	return cyan(a...)

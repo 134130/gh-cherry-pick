@@ -21,8 +21,11 @@ type PullRequest struct {
 	Author struct {
 		Login string `json:"login"`
 	} `json:"author"`
-	State   PullRequestState `json:"state"`
-	IsDraft bool             `json:"isDraft"`
+	State       PullRequestState `json:"state"`
+	IsDraft     bool             `json:"isDraft"`
+	MergeCommit struct {
+		Sha string `json:"oid"`
+	} `json:"mergeCommit"`
 }
 
 func (pr PullRequest) StateString() string {

@@ -10,15 +10,20 @@ import (
 	"strings"
 
 	"github.com/134130/gh-cherry-pick/gitobj"
+	"github.com/134130/gh-cherry-pick/internal/once"
 )
 
+var nameWithOwnerOnce = once.OnceValue[string]{}
+
 func GetNameWithOwner(ctx context.Context) (string, error) {
-	stdout := &bytes.Buffer{}
-	args := []string{"repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"}
-	if err := NewCommand("gh", args...).Run(ctx, WithStdout(stdout)); err != nil {
-		return "", fmt.Errorf("failed to get repository name with owner: %w", err)
-	}
-	return strings.TrimSpace(stdout.String()), nil
+	return nameWithOwnerOnce.Do(ctx, func(ctx context.Context) (string, error) {
+		stdout := &bytes.Buffer{}
+		args := []string{"repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"}
+		if err := NewCommand("gh", args...).Run(ctx, WithStdout(stdout)); err != nil {
+			return "", fmt.Errorf("failed to get repository name with owner: %w", err)
+		}
+		return strings.TrimSpace(stdout.String()), nil
+	})
 }
 
 func GetRepoRoot(ctx context.Context) (string, error) {
@@ -31,7 +36,7 @@ func GetRepoRoot(ctx context.Context) (string, error) {
 
 func GetPullRequest(ctx context.Context, number int) (*gitobj.PullRequest, error) {
 	stdout := &bytes.Buffer{}
-	args := []string{"pr", "view", strconv.Itoa(number), "--json", "number,title,url,author,state,isDraft"}
+	args := []string{"pr", "view", strconv.Itoa(number), "--json", "number,title,url,author,state,isDraft,mergeCommit"}
 	if err := NewCommand("gh", args...).Run(ctx, WithStdout(stdout)); err != nil {
 		return nil, fmt.Errorf("failed to get the pull request: %w", err)
 	}
@@ -48,6 +53,34 @@ func CheckoutNewBranch(ctx context.Context, newBranch, startPoint string) error 
 		return fmt.Errorf("failed to checkout a new branch: %w", err)
 	}
 	return nil
+}
+
+func GetMergeBase(ctx context.Context, commitA, commitB string) (string, error) {
+	repoRoot, err := GetRepoRoot(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to get the repository root: %w", err)
+	}
+	basehead := fmt.Sprintf("%s..%s", commitA, commitB)
+	endpoint := fmt.Sprintf("/repos/%s/compare/%s", repoRoot, basehead)
+
+	stdout := &bytes.Buffer{}
+	if err = NewCommand("gh", "api", endpoint).Run(ctx, WithStdout(stdout)); err != nil {
+		return "", err
+	}
+
+	var response struct {
+		Data struct {
+			MergeBaseCommit struct {
+				SHA string `json:"sha"`
+			} `json:"merge_base_commit"`
+		} `json:"data"`
+	}
+
+	if err = json.NewDecoder(stdout).Decode(&response); err != nil {
+		return "", err
+	}
+
+	return response.Data.MergeBaseCommit.SHA, nil
 }
 
 func Push(ctx context.Context, remote, ref string) error {
@@ -67,7 +100,7 @@ func Fetch(ctx context.Context, remote, refspec string) error {
 func IsDirty(ctx context.Context) (bool, error) {
 	stdout := &bytes.Buffer{}
 	if err := NewCommand("git", "status", "--porcelain").Run(ctx, WithStdout(stdout)); err != nil {
-		return false, fmt.Errorf("failed to check if the repository is dirty: %w", err)
+		return false, err
 	}
 	return len(strings.TrimSpace(stdout.String())) > 0, nil
 }
@@ -75,14 +108,14 @@ func IsDirty(ctx context.Context) (bool, error) {
 func IsInRebaseOrAm(ctx context.Context) (bool, error) {
 	repoRoot, err := GetRepoRoot(ctx)
 	if err != nil {
-		return false, fmt.Errorf("failed to check if the repository is in a rebase or am: %w", err)
+		return false, fmt.Errorf("failed to get the repository root: %w", err)
 	}
 
 	var rebaseMagicFile = fmt.Sprintf("%s/.git/rebase-apply", repoRoot)
-	if _, err := os.Stat(rebaseMagicFile); err == nil {
+	if _, err = os.Stat(rebaseMagicFile); err == nil {
 		return true, nil
 	} else if !os.IsNotExist(err) {
-		return false, fmt.Errorf("failed to check if the repository is in a rebase or am: %w", err)
+		return false, err
 	}
 
 	return false, nil
