@@ -74,7 +74,7 @@ func TestRunWithContext(t *testing.T) {
 		name:     "will be conflicted PR",
 		prNumber: 7,
 		onTo:     "release/10.0",
-		error:    ptr("please resolve the conflicts"),
+		error:    ptr("resolve the conflicts"),
 	}}
 
 	for _, tc := range testcases {
