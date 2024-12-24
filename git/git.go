@@ -52,32 +52,6 @@ func CheckoutNewBranch(ctx context.Context, newBranch, startPoint string) error 
 	return NewCommand("git", "switch", "-c", newBranch, startPoint).Run(ctx)
 }
 
-func GetMergeBase(ctx context.Context, commitA, commitB string) (string, error) {
-	nameWithOwner, err := GetNameWithOwner(ctx)
-	if err != nil {
-		return "", fmt.Errorf("failed to get the repository root: %w", err)
-	}
-	basehead := fmt.Sprintf("%s...%s", commitA, commitB)
-	endpoint := fmt.Sprintf("/repos/%s/compare/%s", nameWithOwner, basehead)
-
-	stdout := &bytes.Buffer{}
-	if err = NewCommand("gh", "api", endpoint).Run(ctx, WithStdout(stdout)); err != nil {
-		return "", err
-	}
-
-	var response struct {
-		MergeBaseCommit struct {
-			SHA string `json:"sha"`
-		} `json:"merge_base_commit"`
-	}
-
-	if err = json.NewDecoder(stdout).Decode(&response); err != nil {
-		return "", err
-	}
-
-	return response.MergeBaseCommit.SHA, nil
-}
-
 func Push(ctx context.Context, remote, ref string) error {
 	return NewCommand("git", "push", "--set-upstream", remote, ref).Run(ctx)
 }
