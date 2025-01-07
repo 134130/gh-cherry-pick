@@ -52,7 +52,7 @@ if [[ "${OS}" == "unknown" || "${ARCH}" == "unknown" ]]; then
   (cd "${PROGRAM_ROOT}" && go build -o dist/gh-cherry-pick ./cmd/gh-cherry-pick)
   exec "${PROGRAM_ROOT}/dist/gh-cherry-pick" "$@"
 else
-  GH_CHERRY_PICK_VERSION="2.0.0"
+  GH_CHERRY_PICK_VERSION="2.1.0"
   curl -sSL "https://github.com/134130/gh-cherry-pick/releases/download/v${GH_CHERRY_PICK_VERSION}/gh-cherry-pick-${GH_CHERRY_PICK_VERSION}-${OS}-${ARCH}.tar.gz" | tar -xz -C "${PROGRAM_ROOT}/dist" gh-cherry-pick
   exec "${PROGRAM_ROOT}/dist/gh-cherry-pick" "$@"
 fi
