@@ -48,8 +48,9 @@ func GetPullRequest(ctx context.Context, number int) (*gitobj.PullRequest, error
 	return &pr, nil
 }
 
-func CheckoutNewBranch(ctx context.Context, newBranch, startPoint string) error {
-	return NewCommand("git", "switch", "-c", newBranch, startPoint).Run(ctx)
+func CheckoutNewBranch(ctx context.Context, newBranch, remote, startPoint string) error {
+	remoteStartPoint := fmt.Sprintf("%s/%s", remote, startPoint)
+	return NewCommand("git", "switch", "-c", newBranch, "-t", remoteStartPoint, remoteStartPoint).Run(ctx)
 }
 
 func Push(ctx context.Context, remote, ref string) error {

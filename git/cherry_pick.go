@@ -104,7 +104,7 @@ func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
 		logger.WithField("branch", cherryPickBranchName).
 			WithField("base", cherryPick.OnTo).
 			Infof("checking out to new branch")
-		if err = CheckoutNewBranch(ctx, cherryPickBranchName, fmt.Sprintf("origin/%s", cherryPick.OnTo)); err != nil {
+		if err = CheckoutNewBranch(ctx, cherryPickBranchName, "origin", cherryPick.OnTo); err != nil {
 			return fmt.Errorf("error checking out to new branch '%s': %w", cherryPickBranchName, err)
 		}
 
