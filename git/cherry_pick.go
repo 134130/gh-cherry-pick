@@ -171,9 +171,9 @@ func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
 
 			nameWithOwner, _ := GetNameWithOwner(ctx)
 
-			logger.Successf("pushed branch %s\ncreate a pull request by visiting:\n    ",
+			logger.Successf("pushed branch %s\ncreate a pull request by visiting:\n    %s",
 				color.Cyan(cherryPickBranchName),
-				fmt.Sprintf("https://github.com/%s/pull/new/%s", nameWithOwner, cherryPickBranchName),
+				fmt.Sprintf("https://github.com/%s/compare/%s...%s", nameWithOwner, cherryPick.OnTo, cherryPickBranchName),
 			)
 
 			return nil
