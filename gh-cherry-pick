@@ -4,55 +4,67 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-PROGRAM_ROOT=$(realpath "$(dirname "${BASH_SOURCE[0]}")")
+SCRIPT_DIR=$(realpath "$(dirname "${BASH_SOURCE[0]}")")
+DIST_DIR="${SCRIPT_DIR}/dist"
 
-if test -f "${PROGRAM_ROOT}/dist/gh-cherry-pick"; then
-  exec "${PROGRAM_ROOT}/dist/gh-cherry-pick" "$@"
+VERSION=$(git -C "$SCRIPT_DIR" describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+
+PROGRAM_NAME="gh-cherry-pick"
+BINARY_NAME="${PROGRAM_NAME}-${VERSION#v}"
+BINARY_PATH="${DIST_DIR}/${BINARY_NAME}"
+
+REPO="134130/gh-cherry-pick"
+
+# If the binary already exists, run it directly
+if test -f "$BINARY_PATH"; then
+  exec "$BINARY_PATH" "$@"
   return
 fi
 
-OS=$(uname -s)
-ARCH=$(uname -m)
-
-case "${OS}" in
-  Linux)
-    OS=linux
-    ;;
-  Darwin)
-    OS=darwin
-    ;;
-  *)
-    OS=unknown
-    exit 1
-    ;;
+case "$(uname -s)" in
+  Linux)  OS="linux" ;;
+  Darwin) OS="darwin" ;;
+  *)      OS="unknown" ;;
+esac
+case "$(uname -m)" in
+  x86_64|amd64)  ARCH="amd64" ;;
+  aarch64|arm64) ARCH="arm64" ;;
+  *)             ARCH="unknown" ;;
 esac
 
-case "${ARCH}" in
-  x86_64)
-    ARCH=amd64
-    ;;
-  arm64)
-    ARCH=arm64
-    ;;
-  *)
-    ARCH=unknown
-    exit 1
-    ;;
-esac
+local_build_and_run() {
+  local reason="$1"
+  echo >&2 "$reason. Building from source..."
 
-mkdir -p "${PROGRAM_ROOT}/dist"
-
-if [[ "${OS}" == "unknown" || "${ARCH}" == "unknown" ]]; then
-  # Unsupported OS or Architecture. Run the script with go instead.
   if ! command -v go >/dev/null; then
-    echo "Go not found on the system" >&2
+    echo >&2 "Go not found on the system. Failed to build from source."
     exit 1
   fi
 
-  (cd "${PROGRAM_ROOT}" && go build -o dist/gh-cherry-pick ./cmd/gh-cherry-pick)
-  exec "${PROGRAM_ROOT}/dist/gh-cherry-pick" "$@"
+  local local_binary_path="${DIST_DIR}/${PROGRAM_NAME}-local-build" # Adjust binary name for local build
+  go build -C "${SCRIPT_DIR}" -o "${local_binary_path}" ./cmd/gh-cherry-pick
+  exec "${local_binary_path}" "$@"
+}
+
+# Unsupported os or Architecture. Run the script with go instead.
+if [[ "$OS" == "unknown" || "$ARCH" == "unknown" ]]; then
+  local_build_and_run "Unsupported OS or Architecture: $(uname -m)-$(uname -s)"
 else
-  GH_CHERRY_PICK_VERSION="2.1.0"
-  curl -sSL "https://github.com/134130/gh-cherry-pick/releases/download/v${GH_CHERRY_PICK_VERSION}/gh-cherry-pick-${GH_CHERRY_PICK_VERSION}-${OS}-${ARCH}.tar.gz" | tar -xz -C "${PROGRAM_ROOT}/dist" gh-cherry-pick
-  exec "${PROGRAM_ROOT}/dist/gh-cherry-pick" "$@"
+  download_url="https://github.com/${REPO}/releases/download/${VERSION}/${PROGRAM_NAME}-${VERSION#v}-${OS}-${ARCH}.tar.gz"
+
+  echo >&2 "Downloading prebuilt binary from ${download_url}..."
+
+  tmpdir=$(mktemp -d)
+  trap 'rm -rf "$tmpdir"' EXIT
+
+  tarball="${tmpdir}/gh-cherry-pick.tar.gz"
+  if ! curl -fSL# --connect-timeout 5 --max-time 30 -o "$tarball" "$download_url"; then
+    local_build_and_run "Failed to download prebuilt binary"
+  fi
+
+  tar -zxf "$tarball" -C "$tmpdir" gh-cherry-pick
+
+  mkdir -p "$DIST_DIR"
+  install -m755 "$tmpdir/gh-cherry-pick" "$BINARY_PATH"
+  exec "$BINARY_PATH" "$@"
 fi
