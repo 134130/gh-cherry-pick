@@ -48,6 +48,18 @@ func GetPullRequest(ctx context.Context, number int) (*gitobj.PullRequest, error
 	return &pr, nil
 }
 
+func GetRemoteURL(ctx context.Context) (string, error) {
+	stdout := &bytes.Buffer{}
+	if err := NewCommand("git", "remote", "get-url", "origin").Run(ctx, WithStdout(stdout)); err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(stdout.String()), nil
+}
+
+func Clone(ctx context.Context, remoteURL, targetDir string) error {
+	return NewCommand("git", "clone", remoteURL, targetDir).Run(ctx)
+}
+
 func CheckoutNewBranch(ctx context.Context, newBranch, remote, startPoint string) error {
 	remoteStartPoint := fmt.Sprintf("%s/%s", remote, startPoint)
 	return NewCommand("git", "switch", "-c", newBranch, "-t", remoteStartPoint, remoteStartPoint).Run(ctx)

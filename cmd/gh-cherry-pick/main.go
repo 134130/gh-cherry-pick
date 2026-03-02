@@ -15,6 +15,7 @@ var (
 	onto     = flag.String("onto", "", "The branch to cherry-pick onto (required)")
 	merge    = flag.String("merge", "auto", "The merge strategy to use (rebase, squash, or auto) (default: auto)")
 	push     = flag.Bool("push", false, "Push the cherry-picked branch to the remote branch")
+	worktree = flag.Bool("worktree", false, "Use a temporary worktree cached in the OS temp directory")
 )
 
 func main() {
@@ -29,6 +30,7 @@ func main() {
 		OnTo:          *onto,
 		MergeStrategy: git.MergeStrategy(*merge),
 		Push:          *push,
+		Worktree:      *worktree,
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)

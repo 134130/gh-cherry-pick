@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -20,6 +22,7 @@ type CherryPick struct {
 	OnTo          string
 	MergeStrategy MergeStrategy
 	Push          bool
+	Worktree      bool
 }
 
 func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
@@ -27,19 +30,57 @@ func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
 
 	logger.Infof("🍒 %s", color.Bold("starting cherry-picker\n"))
 
-	err := tui.WithStep(ctx, "checking is repository ready", func(ctx context.Context, logger log.Logger) error {
-		logger.Infof("checking is repository dirty")
-		if dirty, err := IsDirty(ctx); err != nil {
-			return fmt.Errorf("error checking if the repository is dirty: %w", err)
-		} else if dirty {
-			return fmt.Errorf("the repository is dirty. please commit your changes before continuing")
-		}
+	if cherryPick.Worktree {
+		err := tui.WithStep(ctx, "setting up worktree cache", func(ctx context.Context, logger log.Logger) error {
+			nameWithOwner, err := GetNameWithOwner(ctx)
+			if err != nil {
+				return fmt.Errorf("error getting repository name: %w", err)
+			}
 
-		logger.Infof("checking is repository in a rebase or am")
-		if rebaseOrAm, err := IsInRebaseOrAm(ctx); err != nil {
-			return fmt.Errorf("error checking if the repository is in a rebase or am: %w", err)
-		} else if rebaseOrAm {
-			return fmt.Errorf("the repository is in a rebase or am. please resolve the rebase or am before continuing")
+			remoteURL, err := GetRemoteURL(ctx)
+			if err != nil {
+				return fmt.Errorf("error getting remote URL: %w", err)
+			}
+
+			parts := strings.SplitN(nameWithOwner, "/", 2)
+			ownerDir := filepath.Join(os.TempDir(), "gh-cherry-pick", parts[0])
+			cacheDir := filepath.Join(ownerDir, parts[1])
+
+			if err := os.MkdirAll(ownerDir, 0755); err != nil {
+				return fmt.Errorf("error creating cache directory: %w", err)
+			}
+
+			if _, statErr := os.Stat(filepath.Join(cacheDir, ".git")); os.IsNotExist(statErr) {
+				logger.Infof("cloning repository to cache: %s", cacheDir)
+				if err := Clone(ctx, remoteURL, cacheDir); err != nil {
+					return fmt.Errorf("error cloning repository: %w", err)
+				}
+			} else {
+				logger.Infof("using cached repository: %s", cacheDir)
+			}
+
+			return os.Chdir(cacheDir)
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	err := tui.WithStep(ctx, "checking is repository ready", func(ctx context.Context, logger log.Logger) error {
+		if !cherryPick.Worktree {
+			logger.Infof("checking is repository dirty")
+			if dirty, err := IsDirty(ctx); err != nil {
+				return fmt.Errorf("error checking if the repository is dirty: %w", err)
+			} else if dirty {
+				return fmt.Errorf("the repository is dirty. please commit your changes before continuing")
+			}
+
+			logger.Infof("checking is repository in a rebase or am")
+			if rebaseOrAm, err := IsInRebaseOrAm(ctx); err != nil {
+				return fmt.Errorf("error checking if the repository is in a rebase or am: %w", err)
+			} else if rebaseOrAm {
+				return fmt.Errorf("the repository is in a rebase or am. please resolve the rebase or am before continuing")
+			}
 		}
 
 		return nil
