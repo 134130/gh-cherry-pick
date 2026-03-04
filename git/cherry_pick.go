@@ -203,7 +203,7 @@ func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
 		logger.Successf("cherry-picked branch %s onto %s", color.Cyan(cherryPickBranchName), color.Cyan(cherryPick.OnTo))
 	}
 
-	if cherryPick.Push {
+	if cherryPick.Push || cherryPick.Worktree {
 		err = tui.WithStep(ctx, "pushing branch", func(ctx context.Context, logger log.Logger) error {
 			logger.WithField("branch", cherryPickBranchName).Infof("pushing")
 			if err = Push(ctx, "origin", cherryPickBranchName); err != nil {
