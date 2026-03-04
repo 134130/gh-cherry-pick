@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -15,6 +16,7 @@ import (
 
 var nameWithOwnerOnce = once.OnceValue[string]{}
 var repoWebURLOnce = once.OnceValue[string]{}
+var ghHostnameOnce = once.OnceValue[string]{}
 
 func GetNameWithOwner(ctx context.Context) (string, error) {
 	return nameWithOwnerOnce.Do(ctx, func(ctx context.Context) (string, error) {
@@ -35,6 +37,20 @@ func GetRepoWebURL(ctx context.Context) (string, error) {
 			return "", err
 		}
 		return strings.TrimSpace(stdout.String()), nil
+	})
+}
+
+func GetGHHostname(ctx context.Context) (string, error) {
+	return ghHostnameOnce.Do(ctx, func(ctx context.Context) (string, error) {
+		repoURL, err := GetRepoWebURL(ctx)
+		if err != nil {
+			return "", err
+		}
+		u, err := url.Parse(repoURL)
+		if err != nil {
+			return "", err
+		}
+		return u.Host, nil
 	})
 }
 

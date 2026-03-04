@@ -36,8 +36,13 @@ func inspectMergeStrategy(ctx context.Context, prNumber int, mergeCommitSHA stri
 		return "", fmt.Errorf("failed to get repository name with owner: %w", err)
 	}
 
+	hostname, err := GetGHHostname(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to get GH hostname: %w", err)
+	}
+
 	endpoint := fmt.Sprintf("repos/%v/commits/%v", nameWithOwner, mergeCommitSHA)
-	args := []string{"api", endpoint, "--jq", ".parents[0].sha"}
+	args := []string{"api", "--hostname", hostname, endpoint, "--jq", ".parents[0].sha"}
 
 	stdout := &bytes.Buffer{}
 	if err = NewCommand("gh", args...).Run(ctx, WithStdout(stdout)); err != nil {
@@ -47,9 +52,8 @@ func inspectMergeStrategy(ctx context.Context, prNumber int, mergeCommitSHA stri
 	prevCommitSHA := strings.TrimSpace(stdout.String())
 
 	endpoint = fmt.Sprintf("repos/%v/commits/%v/pulls", nameWithOwner, prevCommitSHA)
-	args = []string{"api"}
+	args = []string{"api", "--hostname", hostname}
 	args = append(args, "-H", "Accept: application/vnd.github+json")
-	args = append(args, "-H", "X-GitHub-Api-Version: 2022-11-28")
 	args = append(args, endpoint, "--jq", ".[].number")
 
 	stdout = &bytes.Buffer{}
