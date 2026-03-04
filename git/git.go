@@ -90,7 +90,7 @@ func Clone(ctx context.Context, remoteURL, targetDir string) error {
 
 func CheckoutNewBranch(ctx context.Context, newBranch, remote, startPoint string) error {
 	remoteStartPoint := fmt.Sprintf("%s/%s", remote, startPoint)
-	return NewCommand("git", "switch", "-c", newBranch, "-t", remoteStartPoint, remoteStartPoint).Run(ctx)
+	return NewCommand("git", "switch", "-c", newBranch, "--track", remoteStartPoint).Run(ctx)
 }
 
 func Push(ctx context.Context, remote, ref string) error {
