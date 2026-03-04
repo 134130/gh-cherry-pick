@@ -36,8 +36,8 @@ func inspectMergeStrategy(ctx context.Context, prNumber int, mergeCommitSHA stri
 		return "", fmt.Errorf("failed to get repository name with owner: %w", err)
 	}
 
-	endpoint := fmt.Sprintf("repos/%v/commits/%v~1", nameWithOwner, mergeCommitSHA)
-	args := []string{"api", endpoint, "--jq", ".sha"}
+	endpoint := fmt.Sprintf("repos/%v/commits/%v", nameWithOwner, mergeCommitSHA)
+	args := []string{"api", endpoint, "--jq", ".parents[0].sha"}
 
 	stdout := &bytes.Buffer{}
 	if err = NewCommand("gh", args...).Run(ctx, WithStdout(stdout)); err != nil {

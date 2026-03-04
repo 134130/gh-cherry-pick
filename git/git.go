@@ -14,11 +14,23 @@ import (
 )
 
 var nameWithOwnerOnce = once.OnceValue[string]{}
+var repoWebURLOnce = once.OnceValue[string]{}
 
 func GetNameWithOwner(ctx context.Context) (string, error) {
 	return nameWithOwnerOnce.Do(ctx, func(ctx context.Context) (string, error) {
 		stdout := &bytes.Buffer{}
 		args := []string{"repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"}
+		if err := NewCommand("gh", args...).Run(ctx, WithStdout(stdout)); err != nil {
+			return "", err
+		}
+		return strings.TrimSpace(stdout.String()), nil
+	})
+}
+
+func GetRepoWebURL(ctx context.Context) (string, error) {
+	return repoWebURLOnce.Do(ctx, func(ctx context.Context) (string, error) {
+		stdout := &bytes.Buffer{}
+		args := []string{"repo", "view", "--json", "url", "--jq", ".url"}
 		if err := NewCommand("gh", args...).Run(ctx, WithStdout(stdout)); err != nil {
 			return "", err
 		}
@@ -87,11 +99,15 @@ func IsInRebaseOrAm(ctx context.Context) (bool, error) {
 		return false, fmt.Errorf("failed to get the repository root: %w", err)
 	}
 
-	var rebaseMagicFile = fmt.Sprintf("%s/.git/rebase-apply", repoRoot)
-	if _, err = os.Stat(rebaseMagicFile); err == nil {
-		return true, nil
-	} else if !os.IsNotExist(err) {
-		return false, err
+	for _, magicFile := range []string{
+		fmt.Sprintf("%s/.git/rebase-apply", repoRoot),
+		fmt.Sprintf("%s/.git/rebase-merge", repoRoot),
+	} {
+		if _, err = os.Stat(magicFile); err == nil {
+			return true, nil
+		} else if !os.IsNotExist(err) {
+			return false, err
+		}
 	}
 
 	return false, nil

@@ -210,11 +210,11 @@ func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
 				return fmt.Errorf("error pushing branch %s: %w", cherryPickBranchName, err)
 			}
 
-			nameWithOwner, _ := GetNameWithOwner(ctx)
+			repoWebURL, _ := GetRepoWebURL(ctx)
 
 			logger.Successf("pushed branch %s\ncreate a pull request by visiting:\n    %s",
 				color.Cyan(cherryPickBranchName),
-				fmt.Sprintf("https://github.com/%s/compare/%s...%s", nameWithOwner, cherryPick.OnTo, cherryPickBranchName),
+				fmt.Sprintf("%s/compare/%s...%s", repoWebURL, cherryPick.OnTo, cherryPickBranchName),
 			)
 
 			return nil
