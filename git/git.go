@@ -18,6 +18,34 @@ var nameWithOwnerOnce = once.OnceValue[string]{}
 var repoWebURLOnce = once.OnceValue[string]{}
 var ghHostnameOnce = once.OnceValue[string]{}
 
+// GetGHHostname derives the GitHub hostname directly from the git remote URL,
+// supporting both HTTPS (https://ghe.example.com/owner/repo.git) and
+// SSH (git@ghe.example.com:owner/repo.git) formats.
+// This avoids the circular dependency of needing the gh CLI to determine
+// which hostname to pass to the gh CLI.
+func GetGHHostname(ctx context.Context) (string, error) {
+	return ghHostnameOnce.Do(ctx, func(ctx context.Context) (string, error) {
+		remoteURL, err := GetRemoteURL(ctx)
+		if err != nil {
+			return "", err
+		}
+		if strings.HasPrefix(remoteURL, "https://") || strings.HasPrefix(remoteURL, "http://") {
+			u, err := url.Parse(remoteURL)
+			if err != nil {
+				return "", fmt.Errorf("cannot parse remote URL %q: %w", remoteURL, err)
+			}
+			return u.Host, nil
+		}
+		// SSH format: git@hostname:owner/repo.git
+		withoutPrefix := strings.TrimPrefix(remoteURL, "git@")
+		parts := strings.SplitN(withoutPrefix, ":", 2)
+		if len(parts) != 2 {
+			return "", fmt.Errorf("cannot parse remote URL %q: unsupported format", remoteURL)
+		}
+		return parts[0], nil
+	})
+}
+
 func GetNameWithOwner(ctx context.Context) (string, error) {
 	return nameWithOwnerOnce.Do(ctx, func(ctx context.Context) (string, error) {
 		stdout := &bytes.Buffer{}
@@ -37,20 +65,6 @@ func GetRepoWebURL(ctx context.Context) (string, error) {
 			return "", err
 		}
 		return strings.TrimSpace(stdout.String()), nil
-	})
-}
-
-func GetGHHostname(ctx context.Context) (string, error) {
-	return ghHostnameOnce.Do(ctx, func(ctx context.Context) (string, error) {
-		repoURL, err := GetRepoWebURL(ctx)
-		if err != nil {
-			return "", err
-		}
-		u, err := url.Parse(repoURL)
-		if err != nil {
-			return "", err
-		}
-		return u.Host, nil
 	})
 }
 

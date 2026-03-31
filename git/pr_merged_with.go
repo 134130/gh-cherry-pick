@@ -16,9 +16,19 @@ const (
 	MergeStrategyAuto   MergeStrategy = "auto"
 )
 
+func (m MergeStrategy) Validate() error {
+	switch m {
+	case MergeStrategyRebase, MergeStrategySquash, MergeStrategyAuto:
+		return nil
+	default:
+		return fmt.Errorf("invalid merge strategy %q: must be one of rebase, squash, auto", m)
+	}
+}
+
 func PRMergedWith(ctx context.Context, prNumber int) (MergeStrategy, error) {
 	stdout := &bytes.Buffer{}
-	if err := NewCommand("gh", "pr", "view", strconv.Itoa(prNumber), "--json", "mergeCommit", "--jq", ".mergeCommit.oid").Run(ctx, WithStdout(stdout)); err != nil {
+	args := []string{"pr", "view", strconv.Itoa(prNumber), "--json", "mergeCommit", "--jq", ".mergeCommit.oid"}
+	if err := NewCommand("gh", args...).Run(ctx, WithStdout(stdout)); err != nil {
 		return "", fmt.Errorf("failed to get merge commit SHA for PR #%d: %w", prNumber, err)
 	}
 
@@ -41,30 +51,29 @@ func inspectMergeStrategy(ctx context.Context, prNumber int, mergeCommitSHA stri
 		return "", fmt.Errorf("failed to get GH hostname: %w", err)
 	}
 
-	endpoint := fmt.Sprintf("repos/%v/commits/%v", nameWithOwner, mergeCommitSHA)
-	args := []string{"api", "--hostname", hostname, endpoint, "--jq", ".parents[0].sha"}
-
-	stdout := &bytes.Buffer{}
-	if err = NewCommand("gh", args...).Run(ctx, WithStdout(stdout)); err != nil {
+	prevCommitSHA, err := ghAPIQuery(ctx, hostname,
+		fmt.Sprintf("repos/%s/commits/%s", nameWithOwner, mergeCommitSHA),
+		".parents[0].sha",
+		nil,
+	)
+	if err != nil {
 		return "", fmt.Errorf("failed to get previous commit SHA for merge commit %s: %w", mergeCommitSHA, err)
 	}
 
-	prevCommitSHA := strings.TrimSpace(stdout.String())
-
-	endpoint = fmt.Sprintf("repos/%v/commits/%v/pulls", nameWithOwner, prevCommitSHA)
-	args = []string{"api", "--hostname", hostname}
-	args = append(args, "-H", "Accept: application/vnd.github+json")
-	args = append(args, endpoint, "--jq", ".[].number")
-
-	stdout = &bytes.Buffer{}
-	if err = NewCommand("gh", args...).Run(ctx, WithStdout(stdout)); err != nil {
+	prNumbersStr, err := ghAPIQuery(ctx, hostname,
+		fmt.Sprintf("repos/%s/commits/%s/pulls", nameWithOwner, prevCommitSHA),
+		".[].number",
+		map[string]string{"Accept": "application/vnd.github+json"},
+	)
+	if err != nil {
 		return "", fmt.Errorf("failed to get related PR numbers for commit %s: %w", prevCommitSHA, err)
 	}
 
-	prevCommitRelatedPRNumbers := strings.TrimSpace(stdout.String())
-	if strings.Contains(prevCommitRelatedPRNumbers, strconv.Itoa(prNumber)) {
-		return MergeStrategyRebase, nil
-	} else {
-		return MergeStrategySquash, nil
+	targetPRStr := strconv.Itoa(prNumber)
+	for _, line := range strings.Split(prNumbersStr, "\n") {
+		if strings.TrimSpace(line) == targetPRStr {
+			return MergeStrategyRebase, nil
+		}
 	}
+	return MergeStrategySquash, nil
 }

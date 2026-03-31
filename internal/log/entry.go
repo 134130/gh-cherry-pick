@@ -32,10 +32,10 @@ type field struct {
 }
 
 func (e *entry) WithField(s string, i interface{}) Logger {
-	var f []field
+	f := make([]field, len(e.fields))
 	copy(f, e.fields)
 
-	slices.DeleteFunc(f, func(item field) bool {
+	f = slices.DeleteFunc(f, func(item field) bool {
 		return item.key == s
 	})
 
@@ -46,6 +46,7 @@ func (e *entry) WithField(s string, i interface{}) Logger {
 
 	return &entry{
 		logger: e.logger,
+		indent: e.indent,
 		fields: f,
 	}
 }

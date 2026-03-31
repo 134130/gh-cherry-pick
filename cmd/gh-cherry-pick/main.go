@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"os/signal"
 
@@ -25,10 +26,17 @@ func main() {
 		os.Exit(2)
 	}
 
+	mergeStrategy := git.MergeStrategy(*merge)
+	if err := mergeStrategy.Validate(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		flag.Usage()
+		os.Exit(2)
+	}
+
 	cherryPick := git.CherryPick{
 		PRNumber:      *prNumber,
 		OnTo:          *onto,
-		MergeStrategy: git.MergeStrategy(*merge),
+		MergeStrategy: mergeStrategy,
 		Push:          *push,
 		Worktree:      *worktree,
 	}
