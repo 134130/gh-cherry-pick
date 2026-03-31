@@ -29,7 +29,7 @@ func (c *Command) Run(ctx context.Context, mods ...CommandModifier) error {
 	if err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
 			return &NotInstalledError{
-				message: fmt.Sprintf("unabled to find %s executable in PATH; please install %s before retrying", c.cmd, c.cmd),
+				message: fmt.Sprintf("unable to find %s executable in PATH; please install %s before retrying", c.cmd, c.cmd),
 				err:     err,
 			}
 		}
@@ -67,7 +67,7 @@ func (c *Command) Run(ctx context.Context, mods ...CommandModifier) error {
 			}
 			return &ge
 		default:
-			panic(fmt.Sprintf("unsupported command: %s", c.cmd))
+			return fmt.Errorf("unsupported command: %s", c.cmd)
 		}
 	}
 

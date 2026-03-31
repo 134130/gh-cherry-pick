@@ -113,12 +113,13 @@ func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
 		if cherryPick.MergeStrategy == MergeStrategyAuto {
 			logger.Infof("no merge strategy given, determining merge strategy")
 
-			if mergeStrategy, err = PRMergedWith(ctx, cherryPick.PRNumber); err != nil {
+			if mergeStrategy, err = PRMergedWith(ctx, cherryPick.PRNumber, pr.MergeCommit.Sha); err != nil {
 				return fmt.Errorf("error determining merge strategy: %w", err)
 			}
 
 			logger.Successf("determined merge strategy as %s", color.Cyan(mergeStrategy))
 		} else {
+			mergeStrategy = cherryPick.MergeStrategy
 			logger.Infof("use merge strategy %s with given flag", color.Cyan(cherryPick.MergeStrategy))
 		}
 

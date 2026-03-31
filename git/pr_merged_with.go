@@ -1,7 +1,6 @@
 package git
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"strconv"
@@ -25,14 +24,7 @@ func (m MergeStrategy) Validate() error {
 	}
 }
 
-func PRMergedWith(ctx context.Context, prNumber int) (MergeStrategy, error) {
-	stdout := &bytes.Buffer{}
-	args := []string{"pr", "view", strconv.Itoa(prNumber), "--json", "mergeCommit", "--jq", ".mergeCommit.oid"}
-	if err := NewCommand("gh", args...).Run(ctx, WithStdout(stdout)); err != nil {
-		return "", fmt.Errorf("failed to get merge commit SHA for PR #%d: %w", prNumber, err)
-	}
-
-	mergeCommitSHA := strings.TrimSpace(stdout.String())
+func PRMergedWith(ctx context.Context, prNumber int, mergeCommitSHA string) (MergeStrategy, error) {
 	if len(mergeCommitSHA) == 0 {
 		return "", fmt.Errorf("failed to get merge commit SHA for PR #%d: PR not merged", prNumber)
 	}

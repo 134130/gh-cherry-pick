@@ -33,15 +33,15 @@ type PullRequest struct {
 func (pr PullRequest) StateString() string {
 	switch pr.State {
 	case PullRequestStateOpen:
+		if pr.IsDraft {
+			return color.Grey("draft")
+		}
 		return color.Green("open")
 	case PullRequestStateClosed:
 		return color.Red("closed")
 	case PullRequestStateMerged:
 		return color.Purple("merged")
 	default:
-		if pr.IsDraft {
-			return color.Grey("draft")
-		}
 		return "UNKNOWN"
 	}
 }
@@ -50,15 +50,15 @@ func (pr PullRequest) PRNumberString() string {
 	str := fmt.Sprintf("#%d", pr.Number)
 	switch pr.State {
 	case PullRequestStateOpen:
+		if pr.IsDraft {
+			return color.Grey(str)
+		}
 		return color.Green(str)
 	case PullRequestStateClosed:
 		return color.Red(str)
 	case PullRequestStateMerged:
 		return color.Purple(str)
 	default:
-		if pr.IsDraft {
-			return color.Grey(str)
-		}
 		return "UNKNOWN"
 	}
 }

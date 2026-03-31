@@ -47,7 +47,7 @@ func main() {
 	ctx = log.CtxWithLogger(ctx)
 
 	if err := cherryPick.RunWithContext(ctx); err != nil {
-		log.LoggerFromCtx(ctx).Failf(err.Error())
+		log.LoggerFromCtx(ctx).Fail(err.Error())
 		os.Exit(1)
 	}
 }
