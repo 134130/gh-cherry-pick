@@ -25,48 +25,49 @@ type CherryPick struct {
 	Worktree      bool
 }
 
-func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
+func (cherryPick *CherryPick) RunWithContext(ctx context.Context) (err error) {
 	logger := log.LoggerFromCtx(ctx)
+	step := tui.StepRunnerFromCtx(ctx)
 
 	logger.Infof("🍒 %s", color.Bold("starting cherry-picker\n"))
 
 	if cherryPick.Worktree {
-		err := tui.WithStep(ctx, "setting up worktree cache", func(ctx context.Context, logger log.Logger) error {
-			nameWithOwner, err := GetNameWithOwner(ctx)
-			if err != nil {
-				return fmt.Errorf("error getting repository name: %w", err)
+		var worktreeDir string
+		err := step(ctx, "setting up worktree", func(ctx context.Context, logger log.Logger) error {
+			logger.WithField("branch", cherryPick.OnTo).Infof("fetching target branch")
+			if err := Fetch(ctx, "origin", cherryPick.OnTo); err != nil {
+				return fmt.Errorf("error fetching branch '%s': %w", cherryPick.OnTo, err)
 			}
 
-			remoteURL, err := GetRemoteURL(ctx)
-			if err != nil {
-				return fmt.Errorf("error getting remote URL: %w", err)
+			worktreeDir = filepath.Join(os.TempDir(), "gh-cherry-pick",
+				fmt.Sprintf("pr-%d-onto-%s-%d", cherryPick.PRNumber,
+					strings.ReplaceAll(cherryPick.OnTo, "/", "-"), time.Now().Unix()))
+
+			startPoint := fmt.Sprintf("origin/%s", cherryPick.OnTo)
+			logger.WithField("path", worktreeDir).Infof("creating worktree")
+			if err := AddWorktree(ctx, worktreeDir, startPoint); err != nil {
+				return fmt.Errorf("error creating worktree: %w", err)
 			}
 
-			parts := strings.SplitN(nameWithOwner, "/", 2)
-			ownerDir := filepath.Join(os.TempDir(), "gh-cherry-pick", parts[0])
-			cacheDir := filepath.Join(ownerDir, parts[1])
-
-			if err := os.MkdirAll(ownerDir, 0755); err != nil {
-				return fmt.Errorf("error creating cache directory: %w", err)
-			}
-
-			if _, statErr := os.Stat(filepath.Join(cacheDir, ".git")); os.IsNotExist(statErr) {
-				logger.Infof("cloning repository to cache: %s", cacheDir)
-				if err := Clone(ctx, remoteURL, cacheDir); err != nil {
-					return fmt.Errorf("error cloning repository: %w", err)
-				}
-			} else {
-				logger.Infof("using cached repository: %s", cacheDir)
-			}
-
-			return os.Chdir(cacheDir)
+			return nil
 		})
 		if err != nil {
 			return err
 		}
+
+		ctx = CtxWithWorkDir(ctx, worktreeDir)
+
+		origCtx := context.Background()
+		defer func() {
+			if err == nil {
+				_ = RemoveWorktree(origCtx, worktreeDir)
+			} else {
+				logger.Warnf("worktree left at %s for manual conflict resolution", worktreeDir)
+			}
+		}()
 	}
 
-	err := tui.WithStep(ctx, "checking is repository ready", func(ctx context.Context, logger log.Logger) error {
+	err = step(ctx, "checking is repository ready", func(ctx context.Context, logger log.Logger) error {
 		if !cherryPick.Worktree {
 			logger.Infof("checking is repository dirty")
 			if dirty, err := IsDirty(ctx); err != nil {
@@ -90,7 +91,7 @@ func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
 	}
 
 	var pr *gitobj.PullRequest
-	err = tui.WithStep(ctx, "validating the pull request", func(ctx context.Context, logger log.Logger) error {
+	err = step(ctx, "validating the pull request", func(ctx context.Context, logger log.Logger) error {
 		logger.WithField("pr", cherryPick.PRNumber).Infof("fetching the pull request")
 		if pr, err = GetPullRequest(ctx, cherryPick.PRNumber); err != nil {
 			return fmt.Errorf("error getting the pull request: %w", err)
@@ -109,7 +110,7 @@ func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
 	}
 
 	var mergeStrategy MergeStrategy
-	err = tui.WithStep(ctx, "determining merge strategy", func(ctx context.Context, logger log.Logger) error {
+	err = step(ctx, "determining merge strategy", func(ctx context.Context, logger log.Logger) error {
 		if cherryPick.MergeStrategy == MergeStrategyAuto {
 			logger.Infof("no merge strategy given, determining merge strategy")
 
@@ -130,7 +131,7 @@ func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
 	}
 
 	var cherryPickBranchName = fmt.Sprintf("cherry-pick-pr-%d-onto-%s-%d", cherryPick.PRNumber, strings.ReplaceAll(cherryPick.OnTo, "/", "-"), time.Now().Unix())
-	err = tui.WithStep(ctx, "checking out branch", func(ctx context.Context, logger log.Logger) error {
+	err = step(ctx, "checking out branch", func(ctx context.Context, logger log.Logger) error {
 		logger.WithField("branch", pr.BaseRefName).Infof("fetching the branch")
 		if err = Fetch(ctx, "origin", pr.BaseRefName); err != nil {
 			return fmt.Errorf("error fetching the branch '%s': %w", cherryPick.OnTo, err)
@@ -158,7 +159,7 @@ func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
 
 	switch mergeStrategy {
 	case MergeStrategyRebase:
-		err = tui.WithStep(ctx, "rebasing PR", func(ctx context.Context, logger log.Logger) error {
+		err = step(ctx, "rebasing PR", func(ctx context.Context, logger log.Logger) error {
 			logger.WithField("pr", cherryPick.PRNumber).Infof("fetching diff")
 			var prDiff bytes.Buffer
 			if err = NewCommand("gh", "pr", "diff", strconv.Itoa(cherryPick.PRNumber), "--patch").Run(ctx, WithStdout(&prDiff)); err != nil {
@@ -184,7 +185,7 @@ func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
 		logger.Successf("rebased branch %s onto %s", color.Cyan(cherryPickBranchName), color.Cyan(cherryPick.OnTo))
 
 	case MergeStrategySquash:
-		err = tui.WithStep(ctx, "cherry-picking PR merge commit", func(ctx context.Context, logger log.Logger) error {
+		err = step(ctx, "cherry-picking PR merge commit", func(ctx context.Context, logger log.Logger) error {
 			logger.WithField("merge_commit", pr.MergeCommit.Sha[:7]).Infof("cherry-picking")
 			if err = NewCommand("git", "cherry-pick", "--keep-redundant-commits", pr.MergeCommit.Sha).Run(ctx); err != nil {
 				helpMsg := fmt.Sprintf("run %v after resolve the conflicts\nrun %v if you want to abort the cherry-pick", color.Green("`git cherry-pick --continue`"), color.Yellow("`git cherry-pick --abort`"))
@@ -205,7 +206,7 @@ func (cherryPick *CherryPick) RunWithContext(ctx context.Context) error {
 	}
 
 	if cherryPick.Push || cherryPick.Worktree {
-		err = tui.WithStep(ctx, "pushing branch", func(ctx context.Context, logger log.Logger) error {
+		err = step(ctx, "pushing branch", func(ctx context.Context, logger log.Logger) error {
 			logger.WithField("branch", cherryPickBranchName).Infof("pushing")
 			if err = Push(ctx, "origin", cherryPickBranchName); err != nil {
 				return fmt.Errorf("error pushing branch %s: %w", cherryPickBranchName, err)

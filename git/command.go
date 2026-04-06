@@ -12,6 +12,21 @@ import (
 	"github.com/cli/safeexec"
 )
 
+type workDirKeyType struct{}
+
+var workDirKey = workDirKeyType{}
+
+func CtxWithWorkDir(ctx context.Context, dir string) context.Context {
+	return context.WithValue(ctx, workDirKey, dir)
+}
+
+func WorkDirFromCtx(ctx context.Context) string {
+	if dir, ok := ctx.Value(workDirKey).(string); ok {
+		return dir
+	}
+	return ""
+}
+
 type Command struct {
 	cmd  string
 	args []string
@@ -37,6 +52,10 @@ func (c *Command) Run(ctx context.Context, mods ...CommandModifier) error {
 	}
 
 	cmd := exec.CommandContext(ctx, exe, c.args...)
+
+	if dir := WorkDirFromCtx(ctx); dir != "" {
+		cmd.Dir = dir
+	}
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

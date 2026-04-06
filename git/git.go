@@ -90,6 +90,20 @@ func GetPullRequest(ctx context.Context, number int) (*gitobj.PullRequest, error
 	return &pr, nil
 }
 
+func ListPullRequests(ctx context.Context, state string) ([]*gitobj.PullRequest, error) {
+	stdout := &bytes.Buffer{}
+	args := []string{"pr", "list", "--state", state, "--json", "number,title,url,author,state,isDraft,mergeCommit,baseRefName,headRefName"}
+	if err := NewCommand("gh", args...).Run(ctx, WithStdout(stdout)); err != nil {
+		return nil, fmt.Errorf("failed to list pull requests: %w", err)
+	}
+
+	var prs []*gitobj.PullRequest
+	if err := json.NewDecoder(stdout).Decode(&prs); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal the pull requests: %w", err)
+	}
+	return prs, nil
+}
+
 func GetRemoteURL(ctx context.Context) (string, error) {
 	stdout := &bytes.Buffer{}
 	if err := NewCommand("git", "remote", "get-url", "origin").Run(ctx, WithStdout(stdout)); err != nil {
@@ -100,6 +114,14 @@ func GetRemoteURL(ctx context.Context) (string, error) {
 
 func Clone(ctx context.Context, remoteURL, targetDir string) error {
 	return NewCommand("git", "clone", remoteURL, targetDir).Run(ctx)
+}
+
+func AddWorktree(ctx context.Context, path, startPoint string) error {
+	return NewCommand("git", "worktree", "add", "--detach", path, startPoint).Run(ctx)
+}
+
+func RemoveWorktree(ctx context.Context, path string) error {
+	return NewCommand("git", "worktree", "remove", "--force", path).Run(ctx)
 }
 
 func CheckoutNewBranch(ctx context.Context, newBranch, remote, startPoint string) error {
