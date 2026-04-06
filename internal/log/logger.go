@@ -27,6 +27,10 @@ func CtxWithLogger(ctx context.Context) context.Context {
 	return context.WithValue(ctx, loggerKey, NewLogger())
 }
 
+func CtxWithCustomLogger(ctx context.Context, l Logger) context.Context {
+	return context.WithValue(ctx, loggerKey, l)
+}
+
 func LoggerFromCtx(ctx context.Context) Logger {
 	l, ok := ctx.Value(loggerKey).(Logger)
 	if !ok {

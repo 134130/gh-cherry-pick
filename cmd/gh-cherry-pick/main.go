@@ -7,8 +7,12 @@ import (
 	"os"
 	"os/signal"
 
+	tea "charm.land/bubbletea/v2"
+	"github.com/mattn/go-isatty"
+
 	"github.com/134130/gh-cherry-pick/git"
 	"github.com/134130/gh-cherry-pick/internal/log"
+	"github.com/134130/gh-cherry-pick/internal/tui"
 )
 
 var (
@@ -21,10 +25,6 @@ var (
 
 func main() {
 	flag.Parse()
-	if *prNumber == 0 || *onto == "" {
-		flag.Usage()
-		os.Exit(2)
-	}
 
 	mergeStrategy := git.MergeStrategy(*merge)
 	if err := mergeStrategy.Validate(); err != nil {
@@ -33,20 +33,80 @@ func main() {
 		os.Exit(2)
 	}
 
-	cherryPick := git.CherryPick{
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+
+	hasPR := *prNumber != 0
+	hasBranch := *onto != ""
+	isTTY := isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd())
+
+	switch {
+	case hasPR && hasBranch && isTTY:
+		// Direct TUI mode: show progress with spinners
+		runDirectTUI(ctx, mergeStrategy)
+	case hasPR && hasBranch:
+		// Plain text mode (non-TTY / piped)
+		runPlainText(ctx, mergeStrategy)
+	case isTTY:
+		// Interactive mode: PR selection + branch input
+		runInteractive(ctx, mergeStrategy)
+	default:
+		// Non-TTY without flags: show usage
+		flag.Usage()
+		os.Exit(2)
+	}
+}
+
+func makeRunFunc(mergeStrategy git.MergeStrategy) tui.RunFunc {
+	return func(ctx context.Context, prNum int, ontoBranch string) error {
+		cp := git.CherryPick{
+			PRNumber:      prNum,
+			OnTo:          ontoBranch,
+			MergeStrategy: mergeStrategy,
+			Push:          *push,
+			Worktree:      *worktree,
+		}
+		return cp.RunWithContext(ctx)
+	}
+}
+
+func runInteractive(ctx context.Context, mergeStrategy git.MergeStrategy) {
+	model := tui.NewInteractiveModel(ctx, git.ListPullRequests, makeRunFunc(mergeStrategy))
+	p := tea.NewProgram(model)
+	model.SetProgram(p)
+
+	if _, err := p.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func runDirectTUI(ctx context.Context, mergeStrategy git.MergeStrategy) {
+	model := tui.NewDirectModel(ctx, makeRunFunc(mergeStrategy), *prNumber, *onto)
+	p := tea.NewProgram(model)
+	model.SetProgram(p)
+
+	header := fmt.Sprintf("  🍒 cherry-pick PR #%d → %s\n", *prNumber, *onto)
+	fmt.Println(header)
+
+	if _, err := p.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func runPlainText(ctx context.Context, mergeStrategy git.MergeStrategy) {
+	ctx = log.CtxWithLogger(ctx)
+	ctx = tui.CtxWithStepRunner(ctx, tui.PlainStepRunner)
+
+	cp := git.CherryPick{
 		PRNumber:      *prNumber,
 		OnTo:          *onto,
 		MergeStrategy: mergeStrategy,
 		Push:          *push,
 		Worktree:      *worktree,
 	}
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer stop()
-
-	ctx = log.CtxWithLogger(ctx)
-
-	if err := cherryPick.RunWithContext(ctx); err != nil {
+	if err := cp.RunWithContext(ctx); err != nil {
 		log.LoggerFromCtx(ctx).Fail(err.Error())
 		os.Exit(1)
 	}
