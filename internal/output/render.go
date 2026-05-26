@@ -55,7 +55,7 @@ func renderPlanHuman(w io.Writer, plan app.Plan) error {
 		method = plan.RequestedMethod
 	}
 	methodLine := string(method)
-	if plan.RequestedMethod != "" && plan.RequestedMethod != plan.Method {
+	if plan.RequestedMethod != "" && plan.RequestedMethod != method {
 		methodLine = fmt.Sprintf("%s (requested %s)", plan.Method, plan.RequestedMethod)
 	}
 	if _, err := fmt.Fprintf(w, "Method: %s\n", methodLine); err != nil {

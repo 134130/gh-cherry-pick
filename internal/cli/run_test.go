@@ -117,6 +117,36 @@ func TestRunApplyCancelDoesNotExecute(t *testing.T) {
 	}
 }
 
+func TestRunApplyBlockedPlanDoesNotPromptOrExecute(t *testing.T) {
+	restore := stubRunHooks(t)
+	defer restore()
+	restoreTerminal := stubTerminalInput(t, true)
+	defer restoreTerminal()
+
+	blocked := testPlan()
+	blocked.BlockedReason = "working tree or index is dirty"
+	buildPlanFunc = func(context.Context, Config) (app.Plan, error) {
+		return blocked, nil
+	}
+	executePlanFunc = func(context.Context, Config, app.Plan) (app.RunResult, error) {
+		t.Fatalf("executePlanFunc should not be called")
+		return app.RunResult{}, nil
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := RunWithIO(context.Background(), []string{"123"}, strings.NewReader("yes\n"), &stdout, &stderr)
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if !strings.Contains(stdout.String(), "Blocked: working tree or index is dirty") {
+		t.Fatalf("expected blocked plan output, got %q", stdout.String())
+	}
+	if strings.Contains(stderr.String(), "Apply this PR?") {
+		t.Fatalf("did not expect prompt, got %q", stderr.String())
+	}
+}
+
 func TestRunApplyYesJSONOutputsOnlyResultJSON(t *testing.T) {
 	restore := stubRunHooks(t)
 	defer restore()
