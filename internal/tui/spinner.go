@@ -14,7 +14,7 @@ import (
 // runs the step function, then decreases indent and prints a blank line.
 func PlainStepRunner(ctx context.Context, title string, f func(ctx context.Context, logger log.Logger) error) (err error) {
 	logger := log.LoggerFromCtx(ctx)
-	logger.Infof(internalColor.Bold(title))
+	logger.Info(internalColor.Bold(title))
 
 	logger.IncreaseIndent()
 	defer logger.DecreaseIndent()

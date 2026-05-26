@@ -28,6 +28,9 @@ type PullRequest struct {
 	} `json:"mergeCommit"`
 	BaseRefName string `json:"baseRefName"`
 	HeadRefName string `json:"headRefName"`
+	Commits     []struct {
+		Oid string `json:"oid"`
+	} `json:"commits"`
 }
 
 func (pr PullRequest) StateString() string {
