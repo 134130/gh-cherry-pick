@@ -140,14 +140,14 @@ func newModel(ctx context.Context, initialPhase phase, listPRs ListPRsFunc, runF
 	ti.CharLimit = 100
 
 	return &Model{
-		phase:    initialPhase,
-		spinner:  sp,
+		phase:     initialPhase,
+		spinner:   sp,
 		textInput: ti,
-		listPRs:  listPRs,
-		runFunc:  runFunc,
-		ctx:      ctx,
-		prNumber: prNumber,
-		onto:     onto,
+		listPRs:   listPRs,
+		runFunc:   runFunc,
+		ctx:       ctx,
+		prNumber:  prNumber,
+		onto:      onto,
 	}
 }
 
@@ -334,12 +334,12 @@ func (m *Model) handleFetchPRs(msg fetchPRsMsg) (tea.Model, tea.Cmd) {
 func (m *Model) handleStepDone(msg stepDoneMsg) (tea.Model, tea.Cmd) {
 	// Format completed step with all accumulated log lines
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("  %s  %s  %s",
+	fmt.Fprintf(&b, "  %s  %s  %s",
 		successStyle.Render("✔"),
 		m.currentStep,
-		dimStyle.Render(formatDuration(msg.duration))))
+		dimStyle.Render(formatDuration(msg.duration)))
 	for _, ll := range m.currentStepLog {
-		b.WriteString(fmt.Sprintf("\n     %s %s", ll.icon, ll.text))
+		fmt.Fprintf(&b, "\n     %s %s", ll.icon, ll.text)
 	}
 	m.currentStep = ""
 	m.currentStepLog = nil
@@ -348,12 +348,12 @@ func (m *Model) handleStepDone(msg stepDoneMsg) (tea.Model, tea.Cmd) {
 
 func (m *Model) handleStepError(msg stepErrorMsg) (tea.Model, tea.Cmd) {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("  %s  %s  %s",
+	fmt.Fprintf(&b, "  %s  %s  %s",
 		failStyle.Render("✘"),
 		m.currentStep,
-		dimStyle.Render(formatDuration(msg.duration))))
+		dimStyle.Render(formatDuration(msg.duration)))
 	for _, ll := range m.currentStepLog {
-		b.WriteString(fmt.Sprintf("\n     %s %s", ll.icon, ll.text))
+		fmt.Fprintf(&b, "\n     %s %s", ll.icon, ll.text)
 	}
 	m.currentStep = ""
 	m.currentStepLog = nil
@@ -363,7 +363,7 @@ func (m *Model) handleStepError(msg stepErrorMsg) (tea.Model, tea.Cmd) {
 func (m *Model) handleLogLine(msg logLineMsg) (tea.Model, tea.Cmd) {
 	if m.currentStep != "" {
 		// Accumulate log lines under the current step (shown in View)
-		m.currentStepLog = append(m.currentStepLog, viewLogLine{icon: msg.icon, text: msg.text})
+		m.currentStepLog = append(m.currentStepLog, viewLogLine(msg))
 		return m, nil
 	}
 	// Between-step log: print directly
@@ -398,7 +398,7 @@ func (m *Model) startCherryPick() tea.Cmd {
 func (m *Model) viewSelectPR() string {
 	var b strings.Builder
 
-	b.WriteString(fmt.Sprintf("\n  %s\n\n", titleStyle.Render("🍒 gh cherry-pick")))
+	fmt.Fprintf(&b, "\n  %s\n\n", titleStyle.Render("🍒 gh cherry-pick"))
 	b.WriteString("  Select a merged pull request:\n\n")
 
 	// Calculate visible range
@@ -426,34 +426,34 @@ func (m *Model) viewSelectPR() string {
 		prNum := fmt.Sprintf("#%-5d", pr.Number)
 
 		if i == m.cursor {
-			b.WriteString(fmt.Sprintf("  %s %s %s  %s\n",
+			fmt.Fprintf(&b, "  %s %s %s  %s\n",
 				cursorStyle.Render("❯"),
 				cursorStyle.Render(prNum),
 				cursorStyle.Render(title),
-				authorStyle.Render("@"+pr.Author.Login)))
+				authorStyle.Render("@"+pr.Author.Login))
 		} else {
-			b.WriteString(fmt.Sprintf("    %s %s  %s\n",
+			fmt.Fprintf(&b, "    %s %s  %s\n",
 				prNumStyle.Render(prNum),
 				title,
-				authorStyle.Render("@"+pr.Author.Login)))
+				authorStyle.Render("@"+pr.Author.Login))
 		}
 	}
 
-	b.WriteString(fmt.Sprintf("\n  %s\n", helpStyle.Render("↑/↓ navigate · enter select · q quit")))
+	fmt.Fprintf(&b, "\n  %s\n", helpStyle.Render("↑/↓ navigate · enter select · q quit"))
 	return b.String()
 }
 
 func (m *Model) viewInputBranch() string {
 	var b strings.Builder
 
-	b.WriteString(fmt.Sprintf("\n  %s\n\n", titleStyle.Render("🍒 gh cherry-pick")))
+	fmt.Fprintf(&b, "\n  %s\n\n", titleStyle.Render("🍒 gh cherry-pick"))
 
 	pr := m.prs[m.cursor]
-	b.WriteString(fmt.Sprintf("  Selected: %s %s\n\n",
+	fmt.Fprintf(&b, "  Selected: %s %s\n\n",
 		prNumStyle.Render(fmt.Sprintf("#%d", pr.Number)),
-		pr.Title))
-	b.WriteString(fmt.Sprintf("  Target branch: %s\n", m.textInput.View()))
-	b.WriteString(fmt.Sprintf("\n  %s\n", helpStyle.Render("enter confirm · esc back · ctrl+c quit")))
+		pr.Title)
+	fmt.Fprintf(&b, "  Target branch: %s\n", m.textInput.View())
+	fmt.Fprintf(&b, "\n  %s\n", helpStyle.Render("enter confirm · esc back · ctrl+c quit"))
 	return b.String()
 }
 
@@ -463,12 +463,12 @@ func (m *Model) viewRunning() string {
 	}
 
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("  %s  %s\n", m.spinner.View(), boldStyle.Render(m.currentStep+"...")))
+	fmt.Fprintf(&b, "  %s  %s\n", m.spinner.View(), boldStyle.Render(m.currentStep+"..."))
 	for _, ll := range m.currentStepLog {
 		lines := strings.Split(strings.TrimRight(ll.text, "\n"), "\n")
-		b.WriteString(fmt.Sprintf("     %s %s\n", ll.icon, lines[0]))
+		fmt.Fprintf(&b, "     %s %s\n", ll.icon, lines[0])
 		for _, line := range lines[1:] {
-			b.WriteString(fmt.Sprintf("       %s\n", line))
+			fmt.Fprintf(&b, "       %s\n", line)
 		}
 	}
 	return b.String()

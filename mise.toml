@@ -1,6 +1,11 @@
 [tools]
-go = '1.25'
+go = '1.26.3'
+golangci-lint = "latest"
 goreleaser = "latest"
+lefthook = "latest"
+
+[tasks.init]
+run = 'lefthook install'
 
 [tasks.release]
 description = "Release a new version. Usage: mise run release -- v1.0.0"
@@ -33,3 +38,24 @@ git push origin "$VERSION"
 
 goreleaser release --clean
 '''
+
+[tasks.lint]
+run = """
+#!/usr/bin/env bash
+set -eou pipefail
+go mod tidy
+golangci-lint run ./...
+go test ./...
+"""
+
+[tasks.fix]
+run = """
+#!/usr/bin/env bash
+set -eou pipefail
+go mod tidy
+golangci-lint run --fix ./...
+go test ./...
+"""
+
+[tasks.test]
+run = 'go test ./...'
