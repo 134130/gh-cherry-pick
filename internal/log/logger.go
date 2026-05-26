@@ -21,18 +21,14 @@ func NewLogger() Logger {
 	return &logger{}
 }
 
-var loggerKey = struct{}{}
-
-func CtxWithLogger(ctx context.Context) context.Context {
-	return context.WithValue(ctx, loggerKey, NewLogger())
-}
+type loggerKey = struct{}
 
 func CtxWithCustomLogger(ctx context.Context, l Logger) context.Context {
-	return context.WithValue(ctx, loggerKey, l)
+	return context.WithValue(ctx, loggerKey{}, l)
 }
 
 func LoggerFromCtx(ctx context.Context) Logger {
-	l, ok := ctx.Value(loggerKey).(Logger)
+	l, ok := ctx.Value(loggerKey{}).(Logger)
 	if !ok {
 		return NewLogger()
 	}
