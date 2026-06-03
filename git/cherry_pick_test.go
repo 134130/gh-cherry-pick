@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
-
 )
 
 func setup(ctx context.Context) func() {
@@ -54,6 +53,10 @@ func ptr[T any](s T) *T {
 }
 
 func TestRunWithContext(t *testing.T) {
+	if os.Getenv("GH_CHERRY_PICK_LEGACY_REMOTE_TESTS") != "1" {
+		t.Skip("legacy v2 remote fixture test; v3 integration coverage uses test/scenario_test.go")
+	}
+
 	ctx := context.Background()
 
 	testcases := []struct {

@@ -3,19 +3,29 @@
 This document turns the v3 CLI interface into implementation-oriented test
 scenarios. v3 is greenfield and focuses on the current branch as the destination.
 
-## Existing Test Baseline
+## Current Test Baseline
 
-The current suite has one integration-style test table in
-`git/cherry_pick_test.go`.
+The v3 suite uses local integration-style fixtures in `test/scenario_test.go`.
+Those tests validate real Git behavior without depending on GitHub state.
 
-| Current Case | Fixture PR | Current Behavior |
+`git/cherry_pick_test.go` is a legacy v2 remote fixture test and is not the
+source of truth for v3.
+
+## External Fixture Repository
+
+Manual end-to-end demos use `https://github.com/134130/test-cherry-pick`.
+Run `./init all` in that repository to reset it and print the current PR
+manifest.
+
+| Logical ID | Shape | Demo Target | Expected |
 | --- | --- | --- |
-| Squash merged PR | `#4` | Succeeds when applied onto `release/10.0`. |
-| Rebase merged PR | `#5` | Succeeds when applied onto `release/10.0`. |
-| Conflicting PR | `#7` | Fails with conflict guidance. |
-
-v3 should reuse those fixture concepts, but the destination is the current
-branch.
+| `basic` | Squash-merged PR | `target-basic` | Applies cleanly to the current branch. |
+| `squash` | Squash-merged PR | `target-squash` | `auto` resolves to `squash`. |
+| `rebase` | Rebase-merged PR | `target-rebase` | `auto` resolves to `patch`. |
+| `merge` | Merge-commit PR | `target-merge` | `auto` resolves to `merge`. |
+| `multi` | Multi-commit PR | `target-multi` | `--method commits` cherry-picks commits in order. |
+| `conflict` | Squash-merged conflicting PR | `target-conflict` | Leaves native conflict state. |
+| `open` | Open PR | `target-open` | Blocks before mutation. |
 
 ## Test Layers
 
@@ -80,31 +90,28 @@ branch.
 
 ## Integration Matrix
 
+Use the manifest printed by `test-cherry-pick ./init all` to map logical IDs to
+the current PR numbers.
+
 | ID | Command | Fixture | Expected |
 | --- | --- | --- | --- |
-| INT-001 | `gh cherry-pick 4 --yes` | Squash merged PR | Applies to current branch and keeps current branch checked out. |
-| INT-002 | `gh cherry-pick 5 --yes` | Rebase merged PR | Applies to current branch and keeps current branch checked out. |
-| INT-003 | `gh cherry-pick 7 --yes` | Conflicting PR | Leaves native conflict state and prints recovery guidance. |
-| INT-004 | `gh cherry-pick 4 --dry-run --json` | Squash merged PR | Emits stable non-mutating JSON. |
-| INT-005 | `gh cherry-pick 4 --yes` | Dirty worktree | Fails without mutation. |
-| INT-006 | `gh cherry-pick 4 --yes` | Clean branch | Does not switch branches, create branches, or push. |
-
-## Suggested Fixture Additions
-
-| Fixture Need | Why |
-| --- | --- |
-| Merge commit PR | Validate `merge` method and auto merge detection. |
-| Multi-commit PR | Validate `commits` method ordering. |
-| Already applied PR | Validate empty-change handling. |
-| Open PR | Validate blocked plan behavior. |
+| INT-001 | `gh cherry-pick <basic-pr> --yes` | `basic` | Applies to current branch and keeps current branch checked out. |
+| INT-002 | `gh cherry-pick <squash-pr> --dry-run --json` | `squash` | Emits stable non-mutating JSON with method `squash`. |
+| INT-003 | `gh cherry-pick <rebase-pr> --yes` | `rebase` | Applies to current branch and keeps current branch checked out. |
+| INT-004 | `gh cherry-pick <merge-pr> --yes` | `merge` | Applies merge commit content to current branch. |
+| INT-005 | `gh cherry-pick <multi-pr> --method commits --yes` | `multi` | Applies PR commits in order. |
+| INT-006 | `gh cherry-pick <conflict-pr> --yes` | `conflict` | Leaves native conflict state and prints recovery guidance. |
+| INT-007 | `gh cherry-pick <open-pr> --dry-run` | `open` | Blocks because the PR is not merged. |
+| INT-008 | `gh cherry-pick <basic-pr> --yes` | Dirty worktree | Fails without mutation. |
+| INT-009 | `gh cherry-pick <basic-pr> --yes` | Clean branch | Does not switch branches, create branches, or push. |
 
 ## Minimum v3 Acceptance Set
 
 | ID | Scenario |
 | --- | --- |
-| MVP-001 | `gh cherry-pick 4 --dry-run --json` emits stable non-mutating JSON. |
-| MVP-002 | `gh cherry-pick 4 --yes` applies squash fixture PR to current branch. |
-| MVP-003 | `gh cherry-pick 5 --yes` applies rebase fixture PR to current branch. |
-| MVP-004 | `gh cherry-pick 7 --yes` reports conflict with native recovery guidance. |
+| MVP-001 | `gh cherry-pick <squash-pr> --dry-run --json` emits stable non-mutating JSON. |
+| MVP-002 | `gh cherry-pick <squash-pr> --yes` applies squash fixture PR to current branch. |
+| MVP-003 | `gh cherry-pick <rebase-pr> --yes` applies rebase fixture PR to current branch. |
+| MVP-004 | `gh cherry-pick <conflict-pr> --yes` reports conflict with native recovery guidance. |
 | MVP-005 | Dirty worktree preflight fails without mutation. |
 | MVP-006 | Successful apply does not switch branches, create branches, or push. |
