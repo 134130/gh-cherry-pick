@@ -111,7 +111,7 @@ func TestHarnessReportsConflict(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected conflict")
 	}
-	if !strings.Contains(err.Error(), "resolve conflicts") {
+	if !strings.Contains(err.Error(), "Resolve the conflict") {
 		t.Fatalf("expected conflict guidance, got %v", err)
 	}
 	assertCurrentBranch(t, h, "target")

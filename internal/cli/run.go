@@ -44,16 +44,24 @@ func runConfig(ctx context.Context, cfg Config, stdin io.Reader, stdout, stderr 
 	}
 
 	if cfg.DryRun {
-		return output.RenderPlan(stdout, plan, output.PlanOptions{Format: cfg.Format, NoColor: cfg.NoColor})
+		return output.RenderPlan(stdout, plan, output.PlanOptions{Format: cfg.Format, NoColor: cfg.NoColor, Verbose: cfg.Verbose})
 	}
 
 	if cfg.Format == output.FormatHuman {
-		if err := output.RenderPlan(stdout, plan, output.PlanOptions{Format: cfg.Format, NoColor: cfg.NoColor}); err != nil {
+		if err := output.RenderPlan(stdout, plan, output.PlanOptions{Format: cfg.Format, NoColor: cfg.NoColor, Verbose: cfg.Verbose}); err != nil {
 			return err
 		}
 	}
 	if plan.Blocked() {
-		return errors.New(plan.BlockedReason)
+		if cfg.Format != output.FormatHuman {
+			return errors.New(plan.BlockedReason)
+		}
+		return reported(errors.New(plan.BlockedReason))
+	}
+	if cfg.Format == output.FormatHuman {
+		if _, err := fmt.Fprintln(stdout); err != nil {
+			return err
+		}
 	}
 	if !cfg.Yes {
 		ok, err := confirm(stdin, stderr, "Apply this PR?")
@@ -67,9 +75,18 @@ func runConfig(ctx context.Context, cfg Config, stdin io.Reader, stdout, stderr 
 
 	result, err := executePlanFunc(ctx, cfg, plan)
 	if err != nil {
+		if cfg.Format == output.FormatHuman {
+			rendered, renderErr := output.RenderExecutionError(stderr, err, output.ErrorOptions{Verbose: cfg.Verbose})
+			if renderErr != nil {
+				return renderErr
+			}
+			if rendered {
+				return reported(err)
+			}
+		}
 		return err
 	}
-	return output.RenderRunResult(stdout, result, cfg.Format)
+	return output.RenderRunResult(stdout, result, output.RunResultOptions{Format: cfg.Format, Verbose: cfg.Verbose})
 }
 
 func buildPlan(ctx context.Context, cfg Config) (app.Plan, error) {

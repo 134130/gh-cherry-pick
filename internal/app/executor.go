@@ -35,7 +35,7 @@ func (e GitKitExecutor) Execute(ctx context.Context, plan Plan) (RunResult, erro
 
 	switch plan.Method {
 	case MethodPatch:
-		err = e.applyPatch(ctx, plan.PR.Number)
+		err = e.applyPatch(ctx, plan)
 	case MethodCommits:
 		err = e.applyCommits(ctx, plan)
 	case MethodSquash:
@@ -56,13 +56,13 @@ func (e GitKitExecutor) Execute(ctx context.Context, plan Plan) (RunResult, erro
 	return RunResult{Plan: plan, CommitSHAs: commits}, nil
 }
 
-func (e GitKitExecutor) applyPatch(ctx context.Context, prNumber int) error {
-	diff, err := e.gh.PRDiff(ctx, prNumber)
+func (e GitKitExecutor) applyPatch(ctx context.Context, plan Plan) error {
+	diff, err := e.gh.PRDiff(ctx, plan.PR.Number)
 	if err != nil {
 		return fmt.Errorf("get PR patch: %w", err)
 	}
 	if _, err := e.git.WithStdin(bytes.NewReader(diff)).Run(ctx, "am", "-3"); err != nil {
-		return fmt.Errorf("apply PR patch: %w\n\nresolve conflicts, then run `git am --continue` or abort with `git am --abort`", err)
+		return e.applyFailure(ctx, plan, err, "Resolve the conflict, then run `git am --continue` or abort with `git am --abort`.")
 	}
 	return nil
 }
@@ -73,7 +73,7 @@ func (e GitKitExecutor) applyCommits(ctx context.Context, plan Plan) error {
 	}
 	for _, commit := range plan.PR.Commits {
 		if _, err := e.git.Run(ctx, "cherry-pick", commit.Oid); err != nil {
-			return fmt.Errorf("cherry-pick commit %s: %w\n\nresolve conflicts, then run `git cherry-pick --continue` or abort with `git cherry-pick --abort`", shortSHA(commit.Oid), err)
+			return e.applyFailure(ctx, plan, err, "Resolve the conflict, then run `git cherry-pick --continue` or abort with `git cherry-pick --abort`.")
 		}
 	}
 	return nil
@@ -85,7 +85,7 @@ func (e GitKitExecutor) applySquash(ctx context.Context, plan Plan) error {
 		return fmt.Errorf("get PR diff: %w", err)
 	}
 	if _, err := e.git.WithStdin(bytes.NewReader(diff)).Run(ctx, "apply", "--3way", "--index"); err != nil {
-		return fmt.Errorf("apply PR diff: %w\n\nresolve conflicts, then stage the files and commit manually", err)
+		return e.applyFailure(ctx, plan, err, "Resolve the conflict, stage the files, then commit manually.")
 	}
 	if _, err := e.git.Run(ctx, "commit", "-m", squashCommitMessage(plan.PR.Title, plan.PR.Number)); err != nil {
 		return fmt.Errorf("commit squashed PR changes: %w", err)
@@ -98,9 +98,27 @@ func (e GitKitExecutor) applyMerge(ctx context.Context, plan Plan) error {
 		return fmt.Errorf("PR #%d has no merge commit", plan.PR.Number)
 	}
 	if _, err := e.git.Run(ctx, "cherry-pick", "-m", "1", plan.PR.MergeCommit.Sha); err != nil {
-		return fmt.Errorf("cherry-pick merge commit %s: %w\n\nresolve conflicts, then run `git cherry-pick --continue` or abort with `git cherry-pick --abort`", shortSHA(plan.PR.MergeCommit.Sha), err)
+		return e.applyFailure(ctx, plan, err, "Resolve the conflict, then run `git cherry-pick --continue` or abort with `git cherry-pick --abort`.")
 	}
 	return nil
+}
+
+func (e GitKitExecutor) applyFailure(ctx context.Context, plan Plan, err error, guidance string) error {
+	return &ApplyFailure{
+		Summary:         fmt.Sprintf("Conflict while applying PR #%d.", plan.PR.Number),
+		ConflictedFiles: e.conflictedFiles(ctx),
+		Guidance:        guidance,
+		Detail:          err.Error(),
+		Err:             err,
+	}
+}
+
+func (e GitKitExecutor) conflictedFiles(ctx context.Context) []string {
+	out, err := e.git.Output(ctx, "diff", "--name-only", "--diff-filter=U")
+	if err != nil || out == "" {
+		return nil
+	}
+	return strings.Fields(out)
 }
 
 func (e GitKitExecutor) createdCommits(ctx context.Context, before string) ([]string, error) {
@@ -112,13 +130,6 @@ func (e GitKitExecutor) createdCommits(ctx context.Context, before string) ([]st
 		return nil, nil
 	}
 	return strings.Fields(out), nil
-}
-
-func shortSHA(sha string) string {
-	if len(sha) <= 7 {
-		return sha
-	}
-	return sha[:7]
 }
 
 var _ Executor = GitKitExecutor{}

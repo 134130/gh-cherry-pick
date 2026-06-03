@@ -28,11 +28,36 @@ func TestRunDryRunRendersPlanWithoutExecuting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RunWithIO returned error: %v", err)
 	}
-	if !strings.Contains(stdout.String(), "PR #123") || !strings.Contains(stdout.String(), "Commands:") {
+	if !strings.Contains(stdout.String(), "Apply PR #123") {
 		t.Fatalf("expected plan output, got %q", stdout.String())
+	}
+	if strings.Contains(stdout.String(), "Commands:") {
+		t.Fatalf("did not expect commands without verbose, got %q", stdout.String())
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("expected no stderr, got %q", stderr.String())
+	}
+}
+
+func TestRunDryRunVerboseRendersCommands(t *testing.T) {
+	restore := stubRunHooks(t)
+	defer restore()
+
+	buildPlanFunc = func(context.Context, Config) (app.Plan, error) {
+		return testPlan(), nil
+	}
+	executePlanFunc = func(context.Context, Config, app.Plan) (app.RunResult, error) {
+		t.Fatalf("executePlanFunc should not be called")
+		return app.RunResult{}, nil
+	}
+
+	var stdout bytes.Buffer
+	err := RunWithIO(context.Background(), []string{"123", "--dry-run", "--verbose"}, strings.NewReader(""), &stdout, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("RunWithIO returned error: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "Commands:") {
+		t.Fatalf("expected verbose plan commands, got %q", stdout.String())
 	}
 }
 
@@ -139,11 +164,54 @@ func TestRunApplyBlockedPlanDoesNotPromptOrExecute(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error")
 	}
-	if !strings.Contains(stdout.String(), "Blocked: working tree or index is dirty") {
+	if !IsReportedError(err) {
+		t.Fatalf("expected reported error, got %T %v", err, err)
+	}
+	if !strings.Contains(stdout.String(), "Cannot apply PR #123: working tree or index is dirty.") {
 		t.Fatalf("expected blocked plan output, got %q", stdout.String())
 	}
 	if strings.Contains(stderr.String(), "Apply this PR?") {
 		t.Fatalf("did not expect prompt, got %q", stderr.String())
+	}
+}
+
+func TestRunApplyRendersExecutionErrorOnce(t *testing.T) {
+	restore := stubRunHooks(t)
+	defer restore()
+
+	buildPlanFunc = func(context.Context, Config) (app.Plan, error) {
+		return testPlan(), nil
+	}
+	executePlanFunc = func(context.Context, Config, app.Plan) (app.RunResult, error) {
+		return app.RunResult{}, &app.ApplyFailure{
+			Summary:         "Conflict while applying PR #123.",
+			ConflictedFiles: []string{"file.txt"},
+			Guidance:        "Resolve the conflict, stage the files, then commit manually.",
+			Detail:          "raw git detail",
+		}
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := RunWithIO(context.Background(), []string{"123", "--yes"}, strings.NewReader(""), &stdout, &stderr)
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if !IsReportedError(err) {
+		t.Fatalf("expected reported error, got %T %v", err, err)
+	}
+	text := stderr.String()
+	for _, want := range []string{
+		"Conflict while applying PR #123.",
+		"Conflicted files:",
+		"  file.txt",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("expected stderr to contain %q, got %q", want, text)
+		}
+	}
+	if strings.Contains(text, "raw git detail") {
+		t.Fatalf("did not expect raw detail without verbose, got %q", text)
 	}
 }
 
@@ -166,6 +234,36 @@ func TestRunApplyYesJSONOutputsOnlyResultJSON(t *testing.T) {
 	out := stdout.String()
 	if strings.Count(out, "\n") != 1 || !strings.Contains(out, `"commitShas":["abc123"]`) {
 		t.Fatalf("expected single JSON object, got %q", out)
+	}
+}
+
+func TestRunApplyYesJSONBlockedPlanReturnsUnreportedError(t *testing.T) {
+	restore := stubRunHooks(t)
+	defer restore()
+
+	blocked := testPlan()
+	blocked.BlockedReason = "working tree or index is dirty"
+	buildPlanFunc = func(context.Context, Config) (app.Plan, error) {
+		return blocked, nil
+	}
+	executePlanFunc = func(context.Context, Config, app.Plan) (app.RunResult, error) {
+		t.Fatalf("executePlanFunc should not be called")
+		return app.RunResult{}, nil
+	}
+
+	var stdout bytes.Buffer
+	err := RunWithIO(context.Background(), []string{"123", "--yes", "--json"}, strings.NewReader(""), &stdout, &bytes.Buffer{})
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if IsReportedError(err) {
+		t.Fatalf("did not expect reported error for JSON output")
+	}
+	if !strings.Contains(err.Error(), "working tree or index is dirty") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("expected no stdout, got %q", stdout.String())
 	}
 }
 

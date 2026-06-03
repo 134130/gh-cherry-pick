@@ -18,6 +18,9 @@ func main() {
 		if errors.Is(err, context.Canceled) {
 			os.Exit(130)
 		}
+		if cli.IsReportedError(err) {
+			os.Exit(1)
+		}
 		_, _ = fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(1)
 	}
