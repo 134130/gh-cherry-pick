@@ -73,7 +73,14 @@ func runConfig(ctx context.Context, cfg Config, stdin io.Reader, stdout, stderr 
 		}
 	}
 
-	result, err := executePlanFunc(ctx, cfg, plan)
+	var commandOutput io.Writer
+	if cfg.Format == output.FormatHuman {
+		commandOutput = stderr
+		if _, err := fmt.Fprintf(stderr, "Applying PR #%d using %s...\n", plan.PR.Number, plan.Method); err != nil {
+			return err
+		}
+	}
+	result, err := executePlanFunc(ctx, cfg, plan, commandOutput)
 	if err != nil {
 		if cfg.Format == output.FormatHuman {
 			rendered, renderErr := output.RenderExecutionError(stderr, err, output.ErrorOptions{Verbose: cfg.Verbose})
@@ -98,9 +105,9 @@ func buildPlan(ctx context.Context, cfg Config) (app.Plan, error) {
 	})
 }
 
-func executePlan(ctx context.Context, _ Config, plan app.Plan) (app.RunResult, error) {
+func executePlan(ctx context.Context, _ Config, plan app.Plan, commandOutput io.Writer) (app.RunResult, error) {
 	runner := gitcmd.NewRunner()
-	executor := app.NewGitKitExecutor(runner)
+	executor := app.NewGitKitExecutor(runner, commandOutput)
 	return executor.Execute(ctx, plan)
 }
 

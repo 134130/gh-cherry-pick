@@ -17,7 +17,7 @@ func TestRunDryRunRendersPlanWithoutExecuting(t *testing.T) {
 	buildPlanFunc = func(context.Context, Config) (app.Plan, error) {
 		return testPlan(), nil
 	}
-	executePlanFunc = func(context.Context, Config, app.Plan) (app.RunResult, error) {
+	executePlanFunc = func(context.Context, Config, app.Plan, io.Writer) (app.RunResult, error) {
 		t.Fatalf("executePlanFunc should not be called")
 		return app.RunResult{}, nil
 	}
@@ -46,7 +46,7 @@ func TestRunDryRunVerboseRendersCommands(t *testing.T) {
 	buildPlanFunc = func(context.Context, Config) (app.Plan, error) {
 		return testPlan(), nil
 	}
-	executePlanFunc = func(context.Context, Config, app.Plan) (app.RunResult, error) {
+	executePlanFunc = func(context.Context, Config, app.Plan, io.Writer) (app.RunResult, error) {
 		t.Fatalf("executePlanFunc should not be called")
 		return app.RunResult{}, nil
 	}
@@ -93,11 +93,12 @@ func TestRunApplyConfirmsThenExecutes(t *testing.T) {
 		return testPlan(), nil
 	}
 	var executed bool
-	executePlanFunc = func(_ context.Context, cfg Config, plan app.Plan) (app.RunResult, error) {
+	executePlanFunc = func(_ context.Context, cfg Config, plan app.Plan, commandOutput io.Writer) (app.RunResult, error) {
 		executed = true
 		if cfg.PRNumber != 123 {
 			t.Fatalf("PR number mismatch: %d", cfg.PRNumber)
 		}
+		_, _ = io.WriteString(commandOutput, "hook output\n")
 		return app.RunResult{Plan: plan, CommitSHAs: []string{"abc123"}}, nil
 	}
 
@@ -112,6 +113,11 @@ func TestRunApplyConfirmsThenExecutes(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "Apply this PR? (y/N): ") {
 		t.Fatalf("expected confirmation prompt, got %q", stderr.String())
+	}
+	for _, want := range []string{"Applying PR #123 using patch...", "hook output"} {
+		if !strings.Contains(stderr.String(), want) {
+			t.Fatalf("expected execution output %q, got %q", want, stderr.String())
+		}
 	}
 	if !strings.Contains(stdout.String(), "Applied PR #123") {
 		t.Fatalf("expected result output, got %q", stdout.String())
@@ -128,7 +134,7 @@ func TestRunApplyCancelDoesNotExecute(t *testing.T) {
 		return testPlan(), nil
 	}
 	var executed bool
-	executePlanFunc = func(context.Context, Config, app.Plan) (app.RunResult, error) {
+	executePlanFunc = func(context.Context, Config, app.Plan, io.Writer) (app.RunResult, error) {
 		executed = true
 		return app.RunResult{}, nil
 	}
@@ -153,7 +159,7 @@ func TestRunApplyBlockedPlanDoesNotPromptOrExecute(t *testing.T) {
 	buildPlanFunc = func(context.Context, Config) (app.Plan, error) {
 		return blocked, nil
 	}
-	executePlanFunc = func(context.Context, Config, app.Plan) (app.RunResult, error) {
+	executePlanFunc = func(context.Context, Config, app.Plan, io.Writer) (app.RunResult, error) {
 		t.Fatalf("executePlanFunc should not be called")
 		return app.RunResult{}, nil
 	}
@@ -182,7 +188,7 @@ func TestRunApplyRendersExecutionErrorOnce(t *testing.T) {
 	buildPlanFunc = func(context.Context, Config) (app.Plan, error) {
 		return testPlan(), nil
 	}
-	executePlanFunc = func(context.Context, Config, app.Plan) (app.RunResult, error) {
+	executePlanFunc = func(context.Context, Config, app.Plan, io.Writer) (app.RunResult, error) {
 		return app.RunResult{}, &app.ApplyFailure{
 			Summary:         "Conflict while applying PR #123.",
 			ConflictedFiles: []string{"file.txt"},
@@ -222,7 +228,10 @@ func TestRunApplyYesJSONOutputsOnlyResultJSON(t *testing.T) {
 	buildPlanFunc = func(context.Context, Config) (app.Plan, error) {
 		return testPlan(), nil
 	}
-	executePlanFunc = func(_ context.Context, _ Config, plan app.Plan) (app.RunResult, error) {
+	executePlanFunc = func(_ context.Context, _ Config, plan app.Plan, commandOutput io.Writer) (app.RunResult, error) {
+		if commandOutput != nil {
+			t.Fatalf("expected JSON execution output to stay captured")
+		}
 		return app.RunResult{Plan: plan, CommitSHAs: []string{"abc123"}}, nil
 	}
 
@@ -246,7 +255,7 @@ func TestRunApplyYesJSONBlockedPlanReturnsUnreportedError(t *testing.T) {
 	buildPlanFunc = func(context.Context, Config) (app.Plan, error) {
 		return blocked, nil
 	}
-	executePlanFunc = func(context.Context, Config, app.Plan) (app.RunResult, error) {
+	executePlanFunc = func(context.Context, Config, app.Plan, io.Writer) (app.RunResult, error) {
 		t.Fatalf("executePlanFunc should not be called")
 		return app.RunResult{}, nil
 	}

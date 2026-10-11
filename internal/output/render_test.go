@@ -132,7 +132,7 @@ func TestRenderRunResultHumanUsesShortSHAs(t *testing.T) {
 
 	text := out.String()
 	for _, want := range []string{
-		"Applied PR #123 using patch.",
+		"✔ Applied PR #123 using patch.",
 		"Created 1 commit:",
 		"  abcdef1",
 	} {
@@ -164,7 +164,7 @@ func TestRenderExecutionErrorHuman(t *testing.T) {
 
 	text := out.String()
 	for _, want := range []string{
-		"Conflict while applying PR #123.",
+		"✘ Conflict while applying PR #123.",
 		"Conflicted files:",
 		"  file.txt",
 		"Resolve the conflict, stage the files, then commit manually.",

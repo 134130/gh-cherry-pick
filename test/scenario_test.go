@@ -1,6 +1,9 @@
 package test
 
 import (
+	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -34,6 +37,33 @@ func TestHarnessAppliesSquashMergedPR(t *testing.T) {
 	assertRemoteRefs(t, h, remoteRefs)
 	if len(result.CommitSHAs) != 1 {
 		t.Fatalf("expected 1 created commit, got %#v", result.CommitSHAs)
+	}
+}
+
+func TestHarnessStreamsCommitHookOutput(t *testing.T) {
+	h := harness.New(t)
+	h.Branch("feature", "origin/main")
+	h.Commit("feature", "feature.txt", "feature\n")
+	h.Push("feature")
+	h.OpenPR(6, "feature", "main", "feature")
+	h.Branch("target", "origin/main")
+	h.SquashMerge(6)
+	h.Checkout("target")
+
+	hook := filepath.Join(h.WorkDir, ".git", "hooks", "pre-commit")
+	if err := os.WriteFile(hook, []byte("#!/bin/sh\necho hook-stdout\necho hook-stderr >&2\n"), 0755); err != nil {
+		t.Fatalf("write pre-commit hook: %v", err)
+	}
+
+	plan := h.Plan(app.PlanOptions{PRNumber: 6})
+	var output bytes.Buffer
+	if _, err := app.NewGitKitExecutor(h.Runner(), &output).Execute(t.Context(), plan); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	for _, want := range []string{"hook-stdout", "hook-stderr"} {
+		if !strings.Contains(output.String(), want) {
+			t.Fatalf("expected %q in streamed hook output %q", want, output.String())
+		}
 	}
 }
 

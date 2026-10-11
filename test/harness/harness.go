@@ -79,7 +79,7 @@ func (h *Harness) Plan(opts app.PlanOptions) app.Plan {
 
 func (h *Harness) Execute(plan app.Plan) (app.RunResult, error) {
 	h.t.Helper()
-	return app.NewGitKitExecutor(h.Runner()).Execute(h.ctx, plan)
+	return app.NewGitKitExecutor(h.Runner(), nil).Execute(h.ctx, plan)
 }
 
 func (h *Harness) Branch(name, startPoint string) *Harness {
