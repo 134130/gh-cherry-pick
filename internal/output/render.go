@@ -36,7 +36,7 @@ func RenderRunResult(w io.Writer, result app.RunResult, opts RunResultOptions) e
 	if opts.Format == FormatJSON {
 		return json.NewEncoder(w).Encode(runResultJSON(result))
 	}
-	if _, err := fmt.Fprintf(w, "Applied PR #%d using %s.\n", result.Plan.PR.Number, result.Plan.Method); err != nil {
+	if _, err := fmt.Fprintf(w, "✔ Applied PR #%d using %s.\n", result.Plan.PR.Number, result.Plan.Method); err != nil {
 		return err
 	}
 	if len(result.CommitSHAs) == 0 {
@@ -59,7 +59,7 @@ func RenderExecutionError(w io.Writer, err error, opts ErrorOptions) (bool, erro
 	if !errors.As(err, &failure) {
 		return false, nil
 	}
-	if _, renderErr := fmt.Fprintln(w, failure.Summary); renderErr != nil {
+	if _, renderErr := fmt.Fprintln(w, "✘ "+failure.Summary); renderErr != nil {
 		return true, renderErr
 	}
 	if len(failure.ConflictedFiles) > 0 {

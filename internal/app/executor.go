@@ -5,22 +5,40 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/134130/gitkit/ghcli"
 	"github.com/134130/gitkit/gitcmd"
 )
 
 type GitKitExecutor struct {
-	git gitcmd.Client
-	gh  ghcli.Client
+	git    gitcmd.Client
+	gh     ghcli.Client
+	output io.Writer
 }
 
-func NewGitKitExecutor(r gitcmd.Runner) GitKitExecutor {
+type synchronizedWriter struct {
+	mu sync.Mutex
+	w  io.Writer
+}
+
+func (w *synchronizedWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.w.Write(p)
+}
+
+func NewGitKitExecutor(r gitcmd.Runner, output io.Writer) GitKitExecutor {
+	if output != nil {
+		output = &synchronizedWriter{w: output}
+	}
 	return GitKitExecutor{
-		git: gitcmd.Git(r),
-		gh:  ghcli.New(r),
+		git:    gitcmd.Git(r),
+		gh:     ghcli.New(r),
+		output: output,
 	}
 }
 
@@ -61,7 +79,7 @@ func (e GitKitExecutor) applyPatch(ctx context.Context, plan Plan) error {
 	if err != nil {
 		return fmt.Errorf("get PR patch: %w", err)
 	}
-	if _, err := e.git.WithStdin(bytes.NewReader(diff)).Run(ctx, "am", "-3"); err != nil {
+	if _, err := e.git.Stream(e.output, e.output).WithStdin(bytes.NewReader(diff)).Run(ctx, "am", "-3"); err != nil {
 		return e.applyFailure(ctx, plan, err, "Resolve the conflict, then run `git am --continue` or abort with `git am --abort`.")
 	}
 	return nil
@@ -72,7 +90,7 @@ func (e GitKitExecutor) applyCommits(ctx context.Context, plan Plan) error {
 		return fmt.Errorf("PR #%d has no commits to cherry-pick", plan.PR.Number)
 	}
 	for _, commit := range plan.PR.Commits {
-		if _, err := e.git.Run(ctx, "cherry-pick", commit.Oid); err != nil {
+		if _, err := e.git.Stream(e.output, e.output).Run(ctx, "cherry-pick", commit.Oid); err != nil {
 			return e.applyFailure(ctx, plan, err, "Resolve the conflict, then run `git cherry-pick --continue` or abort with `git cherry-pick --abort`.")
 		}
 	}
@@ -84,11 +102,15 @@ func (e GitKitExecutor) applySquash(ctx context.Context, plan Plan) error {
 	if err != nil {
 		return fmt.Errorf("get PR diff: %w", err)
 	}
-	if _, err := e.git.WithStdin(bytes.NewReader(diff)).Run(ctx, "apply", "--3way", "--index"); err != nil {
+	if _, err := e.git.Stream(e.output, e.output).WithStdin(bytes.NewReader(diff)).Run(ctx, "apply", "--3way", "--index"); err != nil {
 		return e.applyFailure(ctx, plan, err, "Resolve the conflict, stage the files, then commit manually.")
 	}
-	if _, err := e.git.Run(ctx, "commit", "-m", squashCommitMessage(plan.PR.Title, plan.PR.Number)); err != nil {
-		return fmt.Errorf("commit squashed PR changes: %w", err)
+	if _, err := e.git.Stream(e.output, e.output).Run(ctx, "commit", "-m", squashCommitMessage(plan.PR.Title, plan.PR.Number)); err != nil {
+		return &ApplyFailure{
+			Summary: fmt.Sprintf("Failed to commit PR #%d.", plan.PR.Number),
+			Detail:  err.Error(),
+			Err:     err,
+		}
 	}
 	return nil
 }
@@ -97,16 +119,24 @@ func (e GitKitExecutor) applyMerge(ctx context.Context, plan Plan) error {
 	if plan.PR.MergeCommit.Sha == "" {
 		return fmt.Errorf("PR #%d has no merge commit", plan.PR.Number)
 	}
-	if _, err := e.git.Run(ctx, "cherry-pick", "-m", "1", plan.PR.MergeCommit.Sha); err != nil {
+	if _, err := e.git.Stream(e.output, e.output).Run(ctx, "cherry-pick", "-m", "1", plan.PR.MergeCommit.Sha); err != nil {
 		return e.applyFailure(ctx, plan, err, "Resolve the conflict, then run `git cherry-pick --continue` or abort with `git cherry-pick --abort`.")
 	}
 	return nil
 }
 
 func (e GitKitExecutor) applyFailure(ctx context.Context, plan Plan, err error, guidance string) error {
+	conflictedFiles := e.conflictedFiles(ctx)
+	if len(conflictedFiles) == 0 {
+		return &ApplyFailure{
+			Summary: fmt.Sprintf("Failed to apply PR #%d.", plan.PR.Number),
+			Detail:  err.Error(),
+			Err:     err,
+		}
+	}
 	return &ApplyFailure{
 		Summary:         fmt.Sprintf("Conflict while applying PR #%d.", plan.PR.Number),
-		ConflictedFiles: e.conflictedFiles(ctx),
+		ConflictedFiles: conflictedFiles,
 		Guidance:        guidance,
 		Detail:          err.Error(),
 		Err:             err,

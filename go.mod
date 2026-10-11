@@ -6,7 +6,7 @@ require (
 	charm.land/bubbles/v2 v2.1.0
 	charm.land/bubbletea/v2 v2.0.2
 	charm.land/lipgloss/v2 v2.0.2
-	github.com/134130/gitkit v0.0.0
+	github.com/134130/gitkit v0.0.0-20260525122254-b22ebd82979b
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/cli/safeexec v1.0.1
 	github.com/mattn/go-isatty v0.0.20
@@ -36,5 +36,3 @@ require (
 	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/sys v0.42.0 // indirect
 )
-
-replace github.com/134130/gitkit => ../gitkit

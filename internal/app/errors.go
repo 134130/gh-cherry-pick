@@ -29,6 +29,10 @@ func (e *ApplyFailure) Error() string {
 		b.WriteString("\n\n")
 		b.WriteString(e.Guidance)
 	}
+	if len(e.ConflictedFiles) == 0 && e.Detail != "" {
+		b.WriteString("\n\n")
+		b.WriteString(e.Detail)
+	}
 	return b.String()
 }
 
